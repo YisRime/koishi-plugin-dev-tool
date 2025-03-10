@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-dev-tool",
-  "description": "测试工具",
+  "description": "消息元素获取及数据库工具，可自动备份数据库",
   "version": "0.0.1",
   "contributors": [
     "Yis_Rime <yis_rime@outlook.com>"
@@ -21,7 +21,11 @@
   "keywords": [
     "chatbot",
     "koishi",
-    "plugin"
+    "plugin",
+    "database",
+    "backup",
+    "element",
+    "tool"
   ],
   "devDependencies": {},
   "peerDependencies": {
