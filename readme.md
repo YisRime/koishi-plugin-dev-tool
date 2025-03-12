@@ -22,53 +22,128 @@
 
 ### db
 
-数据库管理命令，直接使用将显示数据库表的概览信息（需要权限等级 4）。
+数据库管理工具（需要权限等级 4）
+
+- 直接使用：显示数据库表概览
+- 指定页码：`db <page>` 分页显示表信息
 
 #### db.query
 
-查询指定表的数据。
+从表中查询数据
 
 - `<table>` 要查询的表名
-- `-f <filter>` 查询条件（JSON格式，默认 `{}`）
-- `-p <page>` 指定页码，用于分页显示结果
+- `-f <filter>` 过滤条件(JSON格式)
+- `--page <page>` 页码
+
+示例：
+
+```bash
+db.query user -f {"platform":"discord"} --page 2
+```
 
 #### db.count
 
-获取表中记录数量。
+统计表中记录数量
 
 - `<table>` 要统计的表名
-- `-f <filter>` 统计条件（JSON格式，默认 `{}`）
+- `-f <filter>` 过滤条件(JSON格式)
+
+示例：
+
+```bash
+db.count user -f {"authority":5}  # 统计管理员数量
+```
+
+#### db.update
+
+更新表中数据
+
+- `<table>` 要操作的表名
+- `-m <mode>` 操作模式:
+  - `set`: 更新已有数据(默认)
+  - `create`: 创建新数据
+  - `upsert`: 更新或插入多条数据
+- `-q <query>` 查询条件（set模式，JSON格式）
+- `-k <keys>` 索引字段（upsert模式，逗号分隔）
+- `-d <data>` 要更新的数据(JSON格式,必填)
+
+示例：
+
+```bash
+# 更新用户权限
+db.update user -m set -q {"id":10086} -d {"authority":4}
+# 创建新用户
+db.update user -m create -d {"name":"New","authority":1}
+```
 
 #### db.delete
 
-从表中删除数据。
+删除表中数据
 
 - `<table>` 要操作的表名
-- `-f <filter>` 删除条件（JSON格式，默认 `{}`，无条件则清空整个表）
+- `-f <filter>` 过滤条件(JSON格式)
+
+示例：
+
+```bash
+# 清空临时表
+db.delete temp_data
+# 删除旧消息
+db.delete message -f {"time":{"$lt":1600000000}}
+```
+
+#### db.drop
+
+删除数据库表（需要权限等级 5）
+
+- `[table]` 要删除的表名
+- `-a` 删除所有表
+
+示例：
+
+```bash
+db.drop temp_table  # 删除单个表
+db.drop -a  # 删除所有表
+```
 
 #### db.backup
 
-立即执行数据库备份。
+备份数据库
 
-- 支持单文件或多文件备份模式
-- 自动创建备份目录
-- 可配置定时自动备份
-- 支持保留指定数量的最新备份
+- `-t <tables>` 备份指定表（逗号分隔）
 
 #### db.restore
 
-恢复数据库备份。
+恢复数据库备份
 
-- 不带参数：列出所有可用的备份
-- `[index]` 可选参数，指定要恢复的备份序号（从1开始）
-- `-t <table>` 可选参数，只恢复指定表的数据
-- 支持从单文件或多文件备份恢复
-- 自动处理日期类型数据
+- `[index]` 备份序号（从1开始）
+- `-t <tables>` 恢复指定表（逗号分隔）
+
+示例：
+
+```bash
+db.restore  # 列出可用备份
+db.restore 1  # 恢复最新备份
+db.restore 2 -t user,group  # 恢复指定表
+```
 
 ## 配置项
 
 - `tables`: 数据库特殊表名列表，用于处理大写表名等特殊情况
-- `backupInterval`: 自动备份间隔（小时），设为 0 禁用自动备份
-- `backupDir`: 备份文件存储目录，默认 `./data/backups`
-- `keepBackups`: 保留最近几次备份，设为 0 保留所有备份
+- `autoBackup`: 是否启用自动备份功能，默认 false
+- `interval`: 自动备份间隔（小时），默认 24，最小 1 小时
+- `dir`: 备份文件存储目录，默认 `./data/backups`
+- `keepBackups`: 保留最近几次备份，默认 7，设为 0 保留所有备份
 - `singleFile`: 是否使用单文件备份模式，默认 false
+
+## 权限要求
+
+- 数据库相关命令需要权限等级 4
+- 删除表命令需要权限等级 5
+
+## 注意事项
+
+1. 备份时会自动处理和还原日期类型数据
+2. 自动备份功能需要开启 `autoBackup` 并设置合适的 `interval`
+3. 建议根据数据量和备份频率适当配置 `keepBackups` 以管理磁盘空间
+4. 删除表操作不可恢复，请谨慎使用

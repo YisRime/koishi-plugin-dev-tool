@@ -1,432 +1,462 @@
-import { Context, Logger } from 'koishi'
+import { Context } from 'koishi'
 import fs from 'fs/promises'
 import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
-
-export const logger = new Logger('dev-tool')
+import { Config, logger } from './index'
 
 /**
- * 备份服务类
+ * 数据库备份服务类
+ * 提供数据库备份、恢复和管理功能
  */
 export class BackupService {
-  private ctx: Context;
-  private backupDirPath: string;
-  private isSingleFile: boolean;
-  private keepBackups: number;
-  private backupTimer: NodeJS.Timeout = null;
-  private tables: string[];
+  private ctx: Context
+  private backupTimer: NodeJS.Timeout = null
+  private config: Config
 
   /**
-   * 创建备份服务
-   * @param ctx Koishi上下文
-   * @param backupDirPath 备份目录路径
-   * @param isSingleFile 是否使用单文件备份
-   * @param keepBackups 保留备份数量
-   * @param customTables 自定义表名
+   * 构造函数
+   * @param {Context} ctx - Koishi上下文
+   * @param {Config} config - 备份配置
    */
-  constructor(ctx: Context, backupDirPath: string, isSingleFile: boolean, keepBackups: number, customTables: string[] = []) {
-    this.ctx = ctx;
-    this.backupDirPath = backupDirPath;
-    this.isSingleFile = isSingleFile;
-    this.keepBackups = keepBackups;
-    this.tables = customTables || [];
-    this.ensureBackupDir();
-  }
+  constructor(ctx: Context, config: Config = {}) {
+    this.ctx = ctx
+    this.config = config
 
-  /**
-   * 设置定时备份
-   * @param intervalHours 备份间隔（小时）
-   */
-  setupSchedule(intervalHours: number): void {
-    if (this.backupTimer) {
-      clearInterval(this.backupTimer);
-      this.backupTimer = null;
-    }
-    const interval = intervalHours * 60 * 60 * 1000;
-    if (interval > 0) {
-      logger.info(`定时备份已启用，间隔：${intervalHours} 小时`);
-      this.backupTimer = setInterval(async () => {
-        logger.info('开始执行定时备份...');
-        await this.performBackup();
-      }, interval);
+    this.ensureBackupDir()
+    if (this.config.autoBackup && this.config.interval > 0) {
+      this.setupAutoBackup(this.config.interval)
     }
   }
 
   /**
-   * 清理资源
+   * 清理资源（停止定时任务）
    */
   dispose(): void {
     if (this.backupTimer) {
-      clearInterval(this.backupTimer);
-      this.backupTimer = null;
+      clearInterval(this.backupTimer)
+      this.backupTimer = null
+      logger.info('已停止定时备份')
     }
-  }
-
-  /**
-   * 执行备份操作
-   */
-  async performBackup(): Promise<string> {
-    try {
-      this.ensureBackupDir();
-      const timestamp = backupUtils.getTimestamp();
-      const dbStats = await this.ctx.database.stats();
-      const allTables = [...Object.keys(dbStats.tables), ...this.tables];
-      if (allTables.length === 0) {
-        return '没有找到可备份的表';
-      }
-      let result: string;
-      if (this.isSingleFile) {
-        const fileName = await backupUtils.backupToSingleFile(this.ctx, this.backupDirPath, allTables, timestamp);
-        result = `备份完成: ${fileName}（${allTables.length}个表）`;
-        if (this.keepBackups > 0) {
-          await backupUtils.cleanupOldBackups(this.backupDirPath, 'backup_', this.keepBackups);
-        }
-      } else {
-        const fileNames = await backupUtils.backupToMultipleFiles(this.ctx, this.backupDirPath, allTables, timestamp);
-        result = `备份完成: 时间戳${timestamp}，${fileNames.length}个表`;
-        if (this.keepBackups > 0) {
-          await backupUtils.cleanupOldBackups(this.backupDirPath, `backup_${timestamp}_`, this.keepBackups);
-        }
-      }
-      logger.info(result);
-      return result;
-    } catch (e) {
-      const message = `备份失败: ${e.message}`;
-      logger.error(message);
-      return message;
-    }
-  }
-
-  /**
-   * 恢复数据库
-   * 优化逻辑：默认显示备份列表，通过序号选择要恢复的备份
-   * @param index 备份序号（从1开始）
-   * @param tableName 指定要恢复的表名（多文件备份模式有效）
-   */
-  async performRestore(index?: string, tableName?: string): Promise<string> {
-    try {
-      this.ensureBackupDir();
-      const backups = await backupUtils.listBackups(this.backupDirPath, this.isSingleFile);
-      if (backups.length === 0) {
-        return '没有找到可用的备份';
-      }
-
-      if (!index) {
-        let result = '可用备份列表：\n\n';
-        result += backups.map((backup, idx) => {
-          const date = `${backup.timestamp.slice(0, 4)}-${backup.timestamp.slice(4, 6)}-${backup.timestamp.slice(6, 8)}`;
-          const time = `${backup.timestamp.slice(9, 11)}:${backup.timestamp.slice(11, 13)}:${backup.timestamp.slice(13, 15)}`;
-          if (this.isSingleFile) {
-            return `${idx + 1}. ${date} ${time}（单文件备份）`;
-          } else {
-            return `${idx + 1}. ${date} ${time}（包含 ${backup.tables?.length || 0} 个表）`;
-          }
-        }).join('\n');
-
-        result += '\n\n使用 db.restore <序号> 恢复指定备份';
-        return result;
-      }
-
-      const backupIndex = parseInt(index) - 1;
-      if (isNaN(backupIndex) || backupIndex < 0 || backupIndex >= backups.length) {
-        return `无效序号，应在 1-${backups.length} 之间`;
-      }
-
-      const targetBackup = backups[backupIndex];
-      let restoredTables: string[] = [];
-
-      if (this.isSingleFile) {
-        const filePath = path.join(this.backupDirPath, `backup_${targetBackup.timestamp}.json`);
-        // 只恢复单表
-        if (tableName) {
-          restoredTables = await backupUtils.restoreSpecificTableFromSingleFile(
-            this.ctx, filePath, tableName
-          );
-        } else {
-          // 恢复全部表
-          restoredTables = await backupUtils.restoreFromSingleFile(this.ctx, filePath);
-        }
-      }
-      else {
-        const timestamp = targetBackup.timestamp;
-        if (tableName) {
-          // 只恢复单表
-          restoredTables = await backupUtils.restoreSpecificTable(
-            this.ctx, this.backupDirPath, timestamp, tableName
-          );
-        } else {
-          // 恢复所有表
-          restoredTables = await backupUtils.restoreFromMultipleFiles(
-            this.ctx, this.backupDirPath, timestamp
-          );
-        }
-      }
-
-      if (restoredTables.length === 0) {
-        return tableName
-          ? `未找到表 ${tableName} 的有效备份数据`
-          : '没有恢复任何数据，请检查文件是否有效';
-      }
-
-      const result = tableName
-        ? `已恢复表 ${tableName}`
-        : `已恢复备份 #${backupIndex + 1}，共 ${restoredTables.length} 个表`;
-
-      logger.info(result);
-      return result;
-    } catch (e) {
-      const message = `恢复操作失败: ${e.message}`;
-      logger.error(message);
-      return message;
-    }
-  }
-
-  /**
-   * 列出所有备份
-   */
-  async listAllBackups(): Promise<string> {
-    const backups = await backupUtils.listBackups(this.backupDirPath, this.isSingleFile);
-    if (backups.length === 0) {
-      return '没有找到任何备份';
-    }
-    return '可用备份列表：\n' + backups.map(backup => {
-      const date = `${backup.timestamp.slice(0, 4)}-${backup.timestamp.slice(4, 6)}-${backup.timestamp.slice(6, 8)}`;
-      const time = `${backup.timestamp.slice(9, 11)}:${backup.timestamp.slice(11, 13)}:${backup.timestamp.slice(13, 15)}`;
-      if (this.isSingleFile) {
-        return `- ${date} ${time} [${backup.timestamp}]（单文件备份）`;
-      } else {
-        return `- ${date} ${time} [${backup.timestamp}]（包含 ${backup.tables.length} 个表）`;
-      }
-    }).join('\n');
   }
 
   /**
    * 确保备份目录存在
+   * @private
    */
   private ensureBackupDir(): void {
-    backupUtils.ensureDir(this.backupDirPath);
-  }
-}
-
-/**
- * 文件操作工具集合
- */
-export const backupUtils = {
-  /**
-   * 确保目录存在
-   */
-  ensureDir: (dirPath: string) => {
-    if (!existsSync(dirPath)) {
-      mkdirSync(dirPath, { recursive: true })
+    if (!existsSync(this.config.dir)) {
+      mkdirSync(this.config.dir, { recursive: true })
     }
-  },
+  }
+
+  /**
+   * 设置定时备份
+   * @param {number} intervalHours - 备份间隔（小时）
+   * @private
+   */
+  private setupAutoBackup(intervalHours: number): void {
+    this.backupTimer && clearInterval(this.backupTimer)
+    const interval = intervalHours * 60 * 60 * 1000
+    logger.info(`已开启定时备份（每 ${intervalHours} 小时）`)
+
+    this.backupTimer = setInterval(async () => {
+      logger.info('开始定时备份...')
+      await this.performBackup()
+    }, interval)
+  }
+
+  /**
+   * 执行备份操作
+   * @param {string[]} [specificTables] - 指定要备份的表
+   * @returns {Promise<string>} 备份结果消息
+   */
+  async performBackup(specificTables?: string[]): Promise<string> {
+    try {
+      this.ensureBackupDir()
+      const timestamp = this.getTimestamp()
+      const tables = await this.getTablesForBackup(specificTables)
+
+      if (tables.length === 0) {
+        return '无可备份表'
+      }
+
+      const result = await this.backupTables(tables, timestamp);
+
+      if (this.config.keepBackups > 0) {
+        await this.cleanupOldBackups(this.config.keepBackups)
+      }
+
+      logger.info(result)
+      return result
+    } catch (e) {
+      return `备份失败：${e.message}`
+    }
+  }
+
+  /**
+   * 执行备份表数据操作
+   * @param {string[]} tables - 要备份的表列表
+   * @param {string} timestamp - 时间戳标识
+   * @returns {Promise<string>} 备份结果消息
+   * @private
+   */
+  private async backupTables(tables: string[], timestamp: string): Promise<string> {
+    if (this.config.singleFile) {
+      // 单文件备份
+      const allData: Record<string, any[]> = {}
+      let successCount = 0
+      let failedTables: string[] = []
+
+      for (const table of tables) {
+        try {
+          const rows = await this.ctx.database.get(table as any, {})
+          allData[table] = rows
+          successCount++
+        } catch (e) {
+          failedTables.push(table)
+          logger.warn(`备份表 ${table} 失败: ${e.message}`)
+        }
+      }
+
+      const fileName = `backup_${timestamp}.json`
+      const filePath = path.join(this.config.dir, fileName)
+      await fs.writeFile(filePath, JSON.stringify(allData, null, 2))
+
+      let result = `备份完成（${successCount}/${tables.length}）\n${timestamp}`
+      if (failedTables.length > 0) {
+        result += `\n失败表: ${failedTables.join(', ')}`
+      }
+      return result
+    } else {
+      // 多文件备份
+      const successFiles: string[] = []
+      const failedTables: string[] = []
+
+      for (const table of tables) {
+        try {
+          const rows = await this.ctx.database.get(table as any, {})
+          const fileName = `backup_${timestamp}_${table}.json`
+          const filePath = path.join(this.config.dir, fileName)
+          await fs.writeFile(filePath, JSON.stringify(rows, null, 2))
+          successFiles.push(fileName)
+        } catch (e) {
+          failedTables.push(table)
+          logger.warn(`备份表 ${table} 失败: ${e.message}`)
+        }
+      }
+
+      let result = `备份完成（${successFiles.length}/${tables.length}）\n${timestamp}`
+      if (failedTables.length > 0) {
+        result += `\n失败表: ${failedTables.join(', ')}`
+      }
+      return result
+    }
+  }
+
+  /**
+   * 获取需要备份的表列表
+   * @param {string[]} [specificTables] - 指定要备份的表
+   * @returns {Promise<string[]>} 需要备份的表列表
+   * @private
+   */
+  private async getTablesForBackup(specificTables?: string[]): Promise<string[]> {
+    try {
+      const dbStats = await this.ctx.database.stats()
+      const existingTables = Object.keys(dbStats.tables || {})
+
+      if (specificTables?.length) {
+        return specificTables.filter(table => {
+          const exists = existingTables.some(t => t.toLowerCase() === table.toLowerCase())
+          !exists && logger.warn(`表 ${table} 不存在`)
+          return exists
+        })
+      }
+
+      const allTables = new Set(existingTables)
+
+      if (this.config.tables?.length) {
+        for (const customTable of this.config.tables) {
+          const matchedTable = existingTables.find(t =>
+            t.toLowerCase() === customTable.toLowerCase())
+          matchedTable ? allTables.add(matchedTable) : allTables.add(customTable)
+        }
+      }
+
+      return Array.from(allTables)
+    } catch (e) {
+      throw new Error(`获取表失败: ${e.message}`)
+    }
+  }
+
+  /**
+   * 恢复备份
+   * @param {string} [index] - 备份序号
+   * @param {string[]} [tableNames] - 指定要恢复的表
+   * @returns {Promise<string>} 恢复结果消息
+   */
+  async performRestore(index?: string, tableNames?: string[]): Promise<string> {
+    try {
+      this.ensureBackupDir()
+      const backups = await this.listBackups()
+
+      if (backups.length === 0) {
+        return '无可用备份'
+      }
+
+      if (!index) {
+        return this.formatBackupsList(backups)
+      }
+
+      const backupIndex = parseInt(index) - 1
+      if (isNaN(backupIndex) || backupIndex < 0 || backupIndex >= backups.length) {
+        return `无效序号`
+      }
+
+      const targetBackup = backups[backupIndex]
+      const restoredTables = await this.restoreBackup(targetBackup, tableNames)
+
+      if (restoredTables.length === 0) {
+        return tableNames?.length
+          ? `未找到备份表 ${tableNames.join(', ')}`
+          : '无有效数据'
+      }
+
+      const result = tableNames?.length
+        ? `已恢复备份表 ${restoredTables.join(', ')}`
+        : `已恢复备份（${restoredTables.length}/${targetBackup.tables?.length || 1}）`
+
+      logger.info(result)
+      return result
+    } catch (e) {
+      return `恢复失败：${e.message}`
+    }
+  }
+
+  /**
+   * 执行备份恢复
+   * @param {Object} backup - 备份信息
+   * @param {string} backup.timestamp - 备份时间戳
+   * @param {string[]} [backup.tables] - 备份的表列表
+   * @param {string[]} [tableNames] - 指定要恢复的表
+   * @returns {Promise<string[]>} 恢复的表列表
+   * @private
+   */
+  private async restoreBackup(backup: {timestamp: string, tables?: string[]}, tableNames?: string[]): Promise<string[]> {
+    const timestamp = backup.timestamp
+
+    if (this.config.singleFile) {
+      const filePath = path.join(this.config.dir, `backup_${timestamp}.json`)
+      try {
+        const content = await fs.readFile(filePath, 'utf-8')
+        const allData = this.parseJSONWithDates(content)
+
+        if (tableNames?.length) {
+          // 从单文件恢复特定表
+          const restoredTables: string[] = []
+
+          for (const tableName of tableNames) {
+            if (!allData[tableName] || !Array.isArray(allData[tableName])) {
+              continue
+            }
+
+            const data = allData[tableName]
+            if (data.length > 0) {
+              await this.ctx.database.upsert(tableName as any, data)
+              restoredTables.push(tableName)
+            }
+          }
+          return restoredTables
+        } else {
+          // 从单文件恢复所有表
+          const restoredTables: string[] = []
+          for (const [table, data] of Object.entries(allData)) {
+            if (Array.isArray(data) && data.length > 0) {
+              await this.ctx.database.upsert(table as any, data)
+              restoredTables.push(table)
+            }
+          }
+          return restoredTables
+        }
+      } catch (e) {
+        logger.error(`恢复失败: ${e.message}`)
+        return []
+      }
+    } else {
+      // 多文件模式恢复
+      const files = await fs.readdir(this.config.dir)
+      const restoredTables: string[] = []
+
+      if (tableNames?.length) {
+        // 恢复特定表
+        for (const tableName of tableNames) {
+          const targetFile = files.find(file => file === `backup_${timestamp}_${tableName}.json`)
+          if (!targetFile) {
+            continue
+          }
+
+          try {
+            const filePath = path.join(this.config.dir, targetFile)
+            const content = await fs.readFile(filePath, 'utf-8')
+            const data = this.parseJSONWithDates(content)
+
+            if (Array.isArray(data) && data.length > 0) {
+              await this.ctx.database.upsert(tableName as any, data)
+              restoredTables.push(tableName)
+            }
+          } catch (e) {
+            logger.warn(`恢复表 ${tableName} 失败: ${e.message}`)
+          }
+        }
+        return restoredTables
+      } else {
+        // 恢复所有表
+        const pattern = new RegExp(`^backup_${timestamp}_(.+)\\.json$`)
+        const backupFiles = files.filter(file => file.match(pattern))
+
+        for (const fileName of backupFiles) {
+          try {
+            const match = fileName.match(/^backup_\d+_(.+)\.json$/)
+            if (!match) continue
+
+            const tableName = match[1]
+            const filePath = path.join(this.config.dir, fileName)
+            const content = await fs.readFile(filePath, 'utf-8')
+            const data = this.parseJSONWithDates(content)
+
+            if (Array.isArray(data) && data.length > 0) {
+              await this.ctx.database.upsert(tableName as any, data)
+              restoredTables.push(tableName)
+            }
+          } catch (e) {
+            logger.warn(`恢复文件 ${fileName} 失败: ${e.message}`)
+          }
+        }
+        return restoredTables
+      }
+    }
+  }
+
+  /**
+   * 格式化备份列表显示
+   * @param {Object[]} backups - 备份列表
+   * @param {string} backups.timestamp - 备份时间戳
+   * @param {string[]} [backups.tables] - 备份的表列表
+   * @returns {string} 格式化后的备份列表
+   * @private
+   */
+  private formatBackupsList(backups: {timestamp: string, tables?: string[]}[]): string {
+    let result = '可用备份（指定序号进行恢复）：\n'
+    result += backups.map((backup, idx) => {
+      const { date, time } = this.formatTimestamp(backup.timestamp)
+      const count = this.config.singleFile ? 1 : (backup.tables?.length || 0)
+      return `${idx + 1}. ${date} ${time}（${count}）`
+    }).join('\n')
+
+    return result
+  }
+
+  /**
+   * 格式化时间戳为日期和时间
+   * @param {string} timestamp - 时间戳
+   * @returns {Object} 格式化后的日期和时间
+   * @returns {string} date - 日期
+   * @returns {string} time - 时间
+   * @private
+   */
+  private formatTimestamp(timestamp: string): {date: string, time: string} {
+    return {
+      date: `${timestamp.slice(0, 4)}-${timestamp.slice(4, 6)}-${timestamp.slice(6, 8)}`,
+      time: `${timestamp.slice(9, 11)}:${timestamp.slice(11, 13)}:${timestamp.slice(13, 15)}`
+    }
+  }
+
+  /**
+   * 注册备份相关命令
+   * @param {any} db - 数据库实例
+   */
+  registerBackupCommands(db: any): void {
+    db.subcommand('.backup', '备份数据库')
+      .option('tables', '-t <tables:string> 备份指定表（逗号分隔）')
+      .action(async ({ options }) => {
+        const tables = options.tables ? options.tables.split(',').filter(Boolean) : undefined
+        return this.performBackup(tables)
+      })
+    db.subcommand('.restore [index]', '恢复数据库')
+      .option('tables', '-t <tables:string> 恢复指定表（逗号分隔）')
+      .action(async ({ options }, index) => {
+        const tables = options.tables ? options.tables.split(',').filter(Boolean) : undefined
+        return this.performRestore(index, tables)
+      })
+  }
 
   /**
    * 获取备份时间戳
+   * @returns {string} 时间戳
+   * @private
    */
-  getTimestamp: () => {
-    const now = new Date();
+  private getTimestamp(): string {
+    const now = new Date()
     return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${
       String(now.getDate()).padStart(2, '0')}_${
       String(now.getHours()).padStart(2, '0')}${
       String(now.getMinutes()).padStart(2, '0')}${
-      String(now.getSeconds()).padStart(2, '0')}`;
-  },
+      String(now.getSeconds()).padStart(2, '0')}`
+  }
 
   /**
    * 清理旧备份
+   * @param {number} keepCount - 保留的备份数量
+   * @private
    */
-  async cleanupOldBackups(dirPath: string, pattern: string, keepCount: number): Promise<void> {
-    if (!keepCount) return;
+  private async cleanupOldBackups(keepCount: number): Promise<void> {
+    if (!keepCount) return
     try {
-      const files = await fs.readdir(dirPath);
+      const files = await fs.readdir(this.config.dir)
+      const pattern = this.config.singleFile ? 'backup_' : 'backup_'
+
       const backupFiles = files
         .filter(file => file.startsWith(pattern))
-        .sort((a, b) => b.localeCompare(a));
+        .sort((a, b) => b.localeCompare(a))
+
       if (backupFiles.length > keepCount) {
         for (let i = keepCount; i < backupFiles.length; i++) {
-          await fs.unlink(path.join(dirPath, backupFiles[i]));
-          logger.info(`已删除旧备份: ${backupFiles[i]}`);
+          await fs.unlink(path.join(this.config.dir, backupFiles[i]))
+          logger.info(`已删除旧备份: ${backupFiles[i]}`)
         }
       }
     } catch (e) {
-      logger.error(`清理旧备份失败: ${e.message}`);
+      logger.error(`删除旧备份失败: ${e.message}`)
     }
-  },
+  }
 
   /**
-   * 备份所有表到单个文件
+   * JSON内容解析工具，可自动转换日期字符串为Date对象
+   * @param {string} content - JSON内容
+   * @returns {any} 解析后的对象
+   * @private
    */
-  async backupToSingleFile(ctx: Context, dirPath: string, tables: string[], timestamp: string): Promise<string> {
-    const allData: Record<string, any[]> = {};
-    for (const table of tables) {
-      try {
-        const rows = await ctx.database.get(table as any, {});
-        allData[table] = rows;
-      } catch (e) {
-        logger.warn(`获取表 ${table} 数据失败: ${e.message}`);
-      }
-    }
-    const fileName = `backup_${timestamp}.json`;
-    const filePath = path.join(dirPath, fileName);
-    await fs.writeFile(filePath, JSON.stringify(allData, null, 2));
-    return fileName;
-  },
-
-  /**
-   * 备份每个表到独立文件
-   */
-  async backupToMultipleFiles(ctx: Context, dirPath: string, tables: string[], timestamp: string): Promise<string[]> {
-    const fileNames: string[] = [];
-
-    for (const table of tables) {
-      try {
-        const rows = await ctx.database.get(table as any, {});
-        const fileName = `backup_${timestamp}_${table}.json`;
-        const filePath = path.join(dirPath, fileName);
-        await fs.writeFile(filePath, JSON.stringify(rows, null, 2));
-        fileNames.push(fileName);
-      } catch (e) {
-        logger.warn(`备份表 ${table} 失败: ${e.message}`);
-      }
-    }
-    return fileNames;
-  },
-
-  /**
-   * 从单个文件恢复数据
-   */
-  async restoreFromSingleFile(ctx: Context, filePath: string): Promise<string[]> {
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const allData = JSON.parse(content, (key, value) => {
-        return typeof value === 'string' &&
-          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value) ?
-          new Date(value) : value;
-      });
-      const restoredTables: string[] = [];
-      for (const [table, data] of Object.entries(allData)) {
-        if (Array.isArray(data) && data.length > 0) {
-          await ctx.database.upsert(table as any, data);
-          restoredTables.push(table);
-        }
-      }
-      return restoredTables;
-    } catch (e) {
-      logger.error(`从文件 ${filePath} 恢复失败: ${e.message}`);
-      return [];
-    }
-  },
-
-  /**
-   * 从单个文件恢复特定表
-   */
-  async restoreSpecificTableFromSingleFile(ctx: Context, filePath: string, tableName: string): Promise<string[]> {
-    try {
-      const content = await fs.readFile(filePath, 'utf-8');
-      const allData = JSON.parse(content, (key, value) => {
-        return typeof value === 'string' &&
-          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value) ?
-          new Date(value) : value;
-      });
-
-      // 检查表是否存在于备份中
-      if (!allData[tableName] || !Array.isArray(allData[tableName])) {
-        logger.warn(`备份中不包含表 ${tableName} 的数据`);
-        return [];
-      }
-
-      // 恢复指定的表
-      const data = allData[tableName];
-      if (data.length > 0) {
-        await ctx.database.upsert(tableName as any, data);
-        return [tableName];
-      }
-      return [];
-    } catch (e) {
-      logger.error(`从文件 ${filePath} 恢复表 ${tableName} 失败: ${e.message}`);
-      return [];
-    }
-  },
-
-  /**
-   * 从多个文件恢复数据
-   * @param timestamp 指定的时间戳，用于过滤特定备份
-   */
-  async restoreFromMultipleFiles(ctx: Context, dirPath: string, timestamp?: string): Promise<string[]> {
-    const files = await fs.readdir(dirPath);
-    const pattern = timestamp ?
-      new RegExp(`^backup_${timestamp}_(.+)\\.json$`) :
-      /^backup_\d+_(.+)\.json$/;
-
-    const backupFiles = files.filter(file => file.match(pattern));
-    const restoredTables: string[] = [];
-
-    for (const fileName of backupFiles) {
-      try {
-        const match = fileName.match(/^backup_\d+_(.+)\.json$/);
-        if (!match) continue;
-        const tableName = match[1];
-        const filePath = path.join(dirPath, fileName);
-        const content = await fs.readFile(filePath, 'utf-8');
-        const data = JSON.parse(content, (key, value) => {
-          return typeof value === 'string' &&
-            /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value) ?
-            new Date(value) : value;
-        });
-        if (Array.isArray(data) && data.length > 0) {
-          await ctx.database.upsert(tableName as any, data);
-          restoredTables.push(tableName);
-        }
-      } catch (e) {
-        logger.warn(`恢复文件 ${fileName} 失败: ${e.message}`);
-      }
-    }
-
-    return restoredTables;
-  },
-
-  /**
-   * 从多文件备份中恢复特定表
-   */
-  async restoreSpecificTable(ctx: Context, dirPath: string, timestamp: string, tableName: string): Promise<string[]> {
-    const files = await fs.readdir(dirPath);
-    const targetFile = files.find(file => file === `backup_${timestamp}_${tableName}.json`);
-
-    if (!targetFile) {
-      logger.warn(`未找到表 ${tableName} 的备份文件`);
-      return [];
-    }
-
-    try {
-      const filePath = path.join(dirPath, targetFile);
-      const content = await fs.readFile(filePath, 'utf-8');
-      const data = JSON.parse(content, (key, value) => {
-        return typeof value === 'string' &&
-          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value) ?
-          new Date(value) : value;
-      });
-
-      if (Array.isArray(data) && data.length > 0) {
-        await ctx.database.upsert(tableName as any, data);
-        return [tableName];
-      }
-      return [];
-    } catch (e) {
-      logger.warn(`恢复表 ${tableName} 失败: ${e.message}`);
-      return [];
-    }
-  },
+  private parseJSONWithDates(content: string): any {
+    return JSON.parse(content, (key, value) => {
+      return typeof value === 'string' &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}.\d{3}Z$/.test(value) ?
+        new Date(value) : value
+    })
+  }
 
   /**
    * 列出可用备份
+   * @returns {Promise<Object[]>} 备份列表
+   * @returns {string} backups.timestamp - 备份时间戳
+   * @returns {string[]} [backups.tables] - 备份的表列表
+   * @private
    */
-  async listBackups(dirPath: string, isSingleFile: boolean): Promise<{timestamp: string, tables?: string[]}[]> {
+  private async listBackups(): Promise<{timestamp: string, tables?: string[]}[]> {
     try {
-      const files = await fs.readdir(dirPath);
-      if (isSingleFile) {
+      const files = await fs.readdir(this.config.dir)
+
+      if (this.config.singleFile) {
         // 单文件备份模式
-        const backups = files
+        return files
           .filter(file => file.match(/^backup_\d+\.json$/))
           .map(file => {
             const match = file.match(/^backup_(\d+)\.json$/);
@@ -434,8 +464,6 @@ export const backupUtils = {
           })
           .filter(Boolean)
           .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-        return backups;
       } else {
         // 多文件备份模式
         const fileMap = new Map<string, string[]>();
@@ -450,6 +478,7 @@ export const backupUtils = {
               fileMap.get(timestamp).push(table);
             }
           });
+
         return Array.from(fileMap.entries())
           .map(([timestamp, tables]) => ({ timestamp, tables }))
           .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
