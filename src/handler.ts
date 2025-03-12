@@ -137,14 +137,14 @@ export async function handleOverview(ctx: Context, options: any, pageArg?: strin
     const startIndex = (page - 1) * pageSize;
     const currentPageTables = showAll ? sortedTables : sortedTables.slice(startIndex, startIndex + pageSize);
 
-    let result = `数据库（${tableCount}个表）概览：共 ${totalRecords} 条`;
+    let result = `数据库（${tableCount}个表）概览：\n共 ${totalRecords} 条`;
     if (!showAll) {
       result += `（第${page}/${totalPages}页）`;
     }
     result += '\n';
 
     currentPageTables.forEach(([name, info]: [string, any]) => {
-      result += `${name.padEnd(9)} ${info.count}条\n`;
+      result += `${name.padEnd(30)} ${info.count}条\n`;
     });
 
     return result;
@@ -182,7 +182,7 @@ export async function handleQuery(ctx: Context, table: string, options: any): Pr
     const start = (page - 1) * pageSize;
     const currentPageData = result.rows.slice(start, start + pageSize);
 
-    return `表 ${result.table} 查询结果：共 ${result.count} 条（第${page}/${totalPages || 1}页）\n` +
+    return `表 ${result.table} 查询结果：\n共 ${result.count} 条（第${page}/${totalPages || 1}页）\n` +
            formatAsTable(currentPageData);
   } catch (e) {
     const message = `查询表 ${table}失败：${e.message}`;
