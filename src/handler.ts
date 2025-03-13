@@ -9,7 +9,7 @@ import { logger } from './index';
  * @param {number} [options.depth] - 格式化深度，默认为无限
  * @returns {string} 格式化后的字符串
  */
-export function formatInspect(data: any, options: { depth?: number } = {}) {
+function formatInspect(data: any, options: { depth?: number } = {}) {
   return inspect(data, { depth: options.depth ?? Infinity })
 }
 

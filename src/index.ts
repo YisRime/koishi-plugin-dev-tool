@@ -2,7 +2,6 @@ import { Context, Schema, h, Logger } from 'koishi'
 import { inspect } from 'util'
 import { BackupService } from './backup'
 import { DbService } from './command'
-import { formatInspect } from './handler'
 
 /**
  * 插件名称
@@ -71,6 +70,7 @@ export function apply(ctx: Context, config: Config = {}) {
    * 用于解析和显示消息中的元素结构
    */
   ins.subcommand('elements', '检查消息元素')
+    .usage('发送消息或回复一条消息来检查其元素结构')
     .action(({ session }) => {
       let { elements, quote } = session
       if (quote) elements = quote.elements
@@ -92,22 +92,5 @@ export function apply(ctx: Context, config: Config = {}) {
       }
 
       return h.text(result)
-    })
-
-  /**
-   * 获取消息ID命令
-   * 显示当前消息或引用消息的ID和相关信息
-   */
-  ins.subcommand('msgid', '获取消息ID')
-    .action(({ session }) => {
-      const messageId = session.quote?.id || session.messageId
-      const idInfo = {
-        messageId,
-        platform: session.platform,
-        channelId: session.channelId,
-        userId: session.userId,
-        timestamp: new Date().toISOString()
-      }
-      return h.text(formatInspect(idInfo))
     })
 }
