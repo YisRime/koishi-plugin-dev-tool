@@ -2,9 +2,9 @@
 
 [![npm](https://img.shields.io/npm/v/koishi-plugin-dev-tool?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-dev-tool)
 
-消息元素获取及数据库工具，可自动备份数据库
+消息元素获取及数据库工具，带有备份数据库功能
 
-## 功能
+## 命令列表
 
 ### elements
 
