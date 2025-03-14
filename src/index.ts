@@ -40,12 +40,12 @@ export interface Config {
  * @type {Schema<Config>}
  */
 export const Config: Schema<Config> = Schema.object({
-  tables: Schema.array(String).description('数据库特殊表名（例如大写）').default([]),
   autoBackup: Schema.boolean().description('是否启用自动备份').default(false),
+  singleFile: Schema.boolean().description('备份以单文件存储').default(false),
   interval: Schema.number().description('自动备份时间间隔（小时）').default(24).min(1),
-  dir: Schema.string().description('备份存储目录').default('./data/backups'),
   keepBackups: Schema.number().description('保留备份数量（设置为 0 关闭限制）').default(7).min(0),
-  singleFile: Schema.boolean().description('以单文件存储备份').default(false),
+  dir: Schema.string().description('备份存储目录').default('./data/backups'),
+  tables: Schema.array(String).description('数据库特殊表名（例如大写）').default([]),
 })
 
 /**
