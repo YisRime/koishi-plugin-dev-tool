@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-dev-tool",
   "description": "消息元素获取及数据库工具，带有备份数据库功能",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "contributors": [
     "Yis_Rime <yis_rime@outlook.com>"
   ],
