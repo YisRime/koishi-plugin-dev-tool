@@ -2,141 +2,119 @@
 
 [![npm](https://img.shields.io/npm/v/koishi-plugin-dev-tool?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-dev-tool)
 
-消息元素获取及数据库工具，带有备份数据库功能
+开发工具，提供消息元素检查、原始消息查看以及数据库工具，可查询或删除数据，以及备份恢复数据库
+
+## 功能介绍
+
+- **消息检查**：解析消息元素结构，查看原始消息内容
+- **数据库管理**：查询、更新、删除数据表内容
+- **数据库备份**：支持自动/手动备份，多种备份模式
+- **数据库恢复**：简便的数据恢复机制
 
 ## 命令列表
 
-### elements
+### 消息检查命令
 
-检查消息元素结构。当消息中包含 JSON 元素时，会将 JSON 内容单独展示。
+| 命令 | 说明 | 示例 |
+|-----|------|------|
+| `inspect elements` | 检查消息元素结构 | 回复一条消息并使用此命令 |
+| `inspect msg` | 查看原始消息内容 | 回复一条消息并使用此命令 |
 
-- 直接使用：显示当前消息的元素结构
-- 回复消息使用：显示被回复消息的元素结构
+### 数据库命令
 
-### db
+| 命令 | 说明 | 示例 |
+|-----|------|------|
+| `db [页码]` | 显示数据库概览 | `db 2` |
+| `db.all` | 显示所有表 | `db.all` |
+| `db.query <表名>` | 查询表数据 | `db.query user -f {"authority":4} --page 2` |
+| `db.count <表名>` | 统计记录数 | `db.count message -f {"platform":"discord"}` |
+| `db.update <表名>` | 更新表数据 | `db.update user -m set -q {"id":123} -d {"authority":4}` |
+| `db.delete <表名>` | 删除表数据 | `db.delete message -f {"time":{"$lt":1600000000}}` |
+| `db.drop [表名]` | 删除表 | `db.drop temp_table` |
+| `db.backup` | 备份数据库 | `db.backup -t user,channel` |
+| `db.restore [序号]` | 恢复数据库 | `db.restore 1 -t user` |
 
-数据库管理工具（需要权限等级 4）
+## 数据库命令参数
 
-- 直接使用：显示数据库表概览
-- 指定页码：`db <page>` 分页显示表信息
+### db.query
 
-#### db.query
+- `-f, --filter <过滤条件>` - JSON格式过滤条件
+- `--page <页码>` - 结果分页，默认为1
 
-从表中查询数据
+### db.count
 
-- `<table>` 要查询的表名
-- `-f <filter>` 过滤条件(JSON格式)
-- `--page <page>` 页码
+- `-f, --filter <过滤条件>` - JSON格式过滤条件
 
-示例：
+### db.update
 
-```bash
-db.query user -f {"platform":"discord"} --page 2
-```
+- `-m, --mode <模式>` - 更新模式：set(默认)/create/upsert
+- `-q, --query <查询条件>` - JSON格式查询条件(set模式)
+- `-k, --keys <索引字段>` - 索引字段(upsert模式,逗号分隔)
+- `-d, --data <数据>` - JSON格式数据(必填)
 
-#### db.count
+### db.delete
 
-统计表中记录数量
+- `-f, --filter <过滤条件>` - JSON格式过滤条件
 
-- `<table>` 要统计的表名
-- `-f <filter>` 过滤条件(JSON格式)
+### db.drop
 
-示例：
+- `-a, --all` - 删除所有表
 
-```bash
-db.count user -f {"authority":5}  # 统计管理员数量
-```
+### db.backup
 
-#### db.update
+- `-t, --tables <表名>` - 指定要备份的表(逗号分隔)
 
-更新表中数据
+### db.restore
 
-- `<table>` 要操作的表名
-- `-m <mode>` 操作模式:
-  - `set`: 更新已有数据(默认)
-  - `create`: 创建新数据
-  - `upsert`: 更新或插入多条数据
-- `-q <query>` 查询条件（set模式，JSON格式）
-- `-k <keys>` 索引字段（upsert模式，逗号分隔）
-- `-d <data>` 要更新的数据(JSON格式,必填)
-
-示例：
-
-```bash
-# 更新用户权限
-db.update user -m set -q {"id":10086} -d {"authority":4}
-# 创建新用户
-db.update user -m create -d {"name":"New","authority":1}
-```
-
-#### db.delete
-
-删除表中数据
-
-- `<table>` 要操作的表名
-- `-f <filter>` 过滤条件(JSON格式)
-
-示例：
-
-```bash
-# 清空临时表
-db.delete temp_data
-# 删除旧消息
-db.delete message -f {"time":{"$lt":1600000000}}
-```
-
-#### db.drop
-
-删除数据库表（需要权限等级 5）
-
-- `[table]` 要删除的表名
-- `-a` 删除所有表
-
-示例：
-
-```bash
-db.drop temp_table  # 删除单个表
-db.drop -a  # 删除所有表
-```
-
-#### db.backup
-
-备份数据库
-
-- `-t <tables>` 备份指定表（逗号分隔）
-
-#### db.restore
-
-恢复数据库备份
-
-- `[index]` 备份序号（从1开始）
-- `-t <tables>` 恢复指定表（逗号分隔）
-
-示例：
-
-```bash
-db.restore  # 列出可用备份
-db.restore 1  # 恢复最新备份
-db.restore 2 -t user,group  # 恢复指定表
-```
+- `-t, --tables <表名>` - 指定要恢复的表(逗号分隔)
 
 ## 配置项
 
-- `tables`: 数据库特殊表名列表，用于处理大写表名等特殊情况
-- `autoBackup`: 是否启用自动备份功能，默认 false
-- `interval`: 自动备份间隔（小时），默认 24，最小 1 小时
-- `dir`: 备份文件存储目录，默认 `./data/backups`
-- `keepBackups`: 保留最近几次备份，默认 7，设为 0 保留所有备份
-- `singleFile`: 是否使用单文件备份模式，默认 false
+| 配置项 | 类型 | 默认值 | 说明 |
+|-------|------|-------|------|
+| `autoBackup` | boolean | false | 启用自动备份 |
+| `singleFile` | boolean | false | 以单文件存储备份 |
+| `interval` | number | 24 | 自动备份间隔（小时） |
+| `keepBackups` | number | 7 | 保留备份数量（0为不限制） |
+| `dir` | string | './data/backups' | 备份存储目录 |
+| `tables` | string[] | [] | 特殊表名（如大写表名） |
 
-## 权限要求
+## 使用示例
 
-- 数据库相关命令需要权限等级 4
-- 删除表命令需要权限等级 5
+### 消息元素检查
 
-## 注意事项
+1. 回复一条包含特殊消息元素的消息
+2. 输入命令：`inspect elements`
+3. 查看解析后的消息元素结构
 
-1. 备份时会自动处理和还原日期类型数据
-2. 自动备份功能需要开启 `autoBackup` 并设置合适的 `interval`
-3. 建议根据数据量和备份频率适当配置 `keepBackups` 以管理磁盘空间
-4. 删除表操作不可恢复，请谨慎使用
+### 数据库备份与恢复
+
+#### 手动备份
+
+db.backup
+
+#### 备份特定表
+
+db.backup -t user,channel,group
+
+#### 查看可用备份
+
+db.restore
+
+#### 恢复备份
+
+db.restore 1
+
+#### 恢复特定表
+
+db.restore 1 -t user,channel
+
+## 自动备份
+
+启用配置项 `autoBackup` 并设置 `interval` 可实现定时自动备份数据库。过期备份会根据 `keepBackups` 设置自动清理。
+
+## 使用建议
+
+1. 在正式使用数据库命令修改数据前，先执行备份操作
+2. 复杂的数据库更新操作请先测试，以避免数据丢失
+3. 建议将备份目录配置到独立存储或云端同步目录
