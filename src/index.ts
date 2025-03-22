@@ -188,7 +188,26 @@ export function apply(ctx: Context, config: Config = {}) {
   ins.subcommand('msg', '获取原始消息内容')
     .usage('发送或回复消息以查看其原始内容')
     .action(({ session }) => {
-      const content = session.quote ? session.quote.content : session.content
-      return h('message', [h('code', { lang: 'text' }, content)])
+      let content = session.quote ? session.quote.content : session.content
+      const elements = session.quote ? session.quote.elements : session.elements
+      // 直接返回原始内容
+      let result = `原始内容:\n${content}`
+      // 添加原始元素
+      result += '\n原始元素:\n' + JSON.stringify(elements, null, 2)
+      // 简单列出各种元素
+      const elementTypes = elements.map(el => el.type)
+      if (elementTypes.length > 0) {
+        result += '\n消息包含的元素类型: ' + elementTypes.join(', ')
+      }
+      // 对于特殊元素内容，直接显示原始数据
+      elements.forEach((element, idx) => {
+        if (element.type === 'json' && element.attrs?.data) {
+          result += `\nJSON元素 #${idx + 1} 原始数据:\n` + element.attrs.data
+        }
+        if (element.type === 'forward') {
+          result += `\n转发消息元素 #${idx + 1} 原始数据:\n` + JSON.stringify(element)
+        }
+      })
+      return h('message', [h('code', { lang: 'text' }, result)])
     })
 }
