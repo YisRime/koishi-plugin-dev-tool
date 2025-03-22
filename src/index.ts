@@ -157,10 +157,12 @@ export function apply(ctx: Context, config: Config = {}) {
   /**
    * 检查消息元素命令
    */
-  ins.subcommand('elements <messageId:string>', '检查消息元素')
-    .usage('发送或回复消息以查看其元素结构，或指定消息ID查看特定消息')
-    .action(async ({ session }, messageId) => {
+  ins.subcommand('elements', '检查消息元素')
+    .option('id', '-i <messageId:string> 指定消息ID')
+    .usage('发送或回复消息以查看其元素结构，使用 -i 指定消息ID')
+    .action(async ({ session, options }) => {
       let elements
+      const messageId = options.id
 
       if (messageId) {
         try {
@@ -196,10 +198,12 @@ export function apply(ctx: Context, config: Config = {}) {
   /**
    * 获取原始消息内容命令
    */
-  ins.subcommand('msg <messageId:string>', '获取原始消息内容')
-    .usage('发送或回复消息以查看其原始内容，或指定消息ID查看特定消息')
-    .action(async ({ session }, messageId) => {
+  ins.subcommand('msg', '获取原始消息内容')
+    .option('id', '-i <messageId:string> 指定消息ID')
+    .usage('发送或回复消息以查看其原始内容，使用 -i 指定消息ID')
+    .action(async ({ session, options }) => {
       let content, elements
+      const messageId = options.id
 
       if (messageId) {
         try {
