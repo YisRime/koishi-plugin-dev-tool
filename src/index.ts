@@ -157,11 +157,22 @@ export function apply(ctx: Context, config: Config = {}) {
   /**
    * 检查消息元素命令
    */
-  ins.subcommand('elements', '检查消息元素')
-    .usage('发送或回复消息以查看其元素结构')
-    .action(({ session }) => {
-      let { elements, quote } = session
-      if (quote) elements = quote.elements
+  ins.subcommand('elements <messageId:string>', '检查消息元素')
+    .usage('发送或回复消息以查看其元素结构，或指定消息ID查看特定消息')
+    .action(async ({ session }, messageId) => {
+      let elements
+
+      if (messageId) {
+        try {
+          const message = await session.bot.getMessage(session.channelId, messageId)
+          if (!message) return '未找到指定消息'
+          elements = message.elements
+        } catch (error) {
+          return `获取消息失败: ${error.message}`
+        }
+      } else {
+        elements = session.quote ? session.quote.elements : session.elements
+      }
 
       const jsons = []
       elements = elements.map((element) => {
@@ -174,9 +185,9 @@ export function apply(ctx: Context, config: Config = {}) {
 
       let result = inspect(elements, { depth: Infinity })
       if (jsons.length) {
-        result += '\n\n' + jsons.map((data, index) =>
-          `[JSON ${index + 1}]: ${inspect(data, { depth: Infinity })}`
-        ).join('\n\n')
+        result += '\n' + jsons.map((data, index) =>
+          `[JSON ${index + 1}]:\n${inspect(data, { depth: Infinity })}`
+        ).join('\n')
       }
 
       return h.text(result)
@@ -185,27 +196,33 @@ export function apply(ctx: Context, config: Config = {}) {
   /**
    * 获取原始消息内容命令
    */
-  ins.subcommand('msg', '获取原始消息内容')
-    .usage('发送或回复消息以查看其原始内容')
-    .action(({ session }) => {
-      let content = session.quote ? session.quote.content : session.content
-      const elements = session.quote ? session.quote.elements : session.elements
-      // 直接返回原始内容
-      let result = `原始内容:\n${content}`
-      // 添加原始元素
-      result += '\n原始元素:\n' + JSON.stringify(elements, null, 2)
-      // 简单列出各种元素
-      const elementTypes = elements.map(el => el.type)
-      if (elementTypes.length > 0) {
-        result += '\n消息包含的元素类型: ' + elementTypes.join(', ')
+  ins.subcommand('msg <messageId:string>', '获取原始消息内容')
+    .usage('发送或回复消息以查看其原始内容，或指定消息ID查看特定消息')
+    .action(async ({ session }, messageId) => {
+      let content, elements
+
+      if (messageId) {
+        try {
+          const message = await session.bot.getMessage(session.channelId, messageId)
+          if (!message) return '未找到指定消息'
+          content = message.content
+          elements = message.elements
+        } catch (error) {
+          return `获取消息失败: ${error.message}`
+        }
+      } else {
+        content = session.quote ? session.quote.content : session.content
+        elements = session.quote ? session.quote.elements : session.elements
       }
-      // 对于特殊元素内容，直接显示原始数据
-      elements.forEach((element, idx) => {
+      // 返回原始内容
+      let result = content
+      // 显示原始数据
+      elements?.forEach((element, idx) => {
         if (element.type === 'json' && element.attrs?.data) {
-          result += `\nJSON元素 #${idx + 1} 原始数据:\n` + element.attrs.data
+          result += `\n[JSON ${idx + 1}]:\n` + element.attrs.data
         }
         if (element.type === 'forward') {
-          result += `\n转发消息元素 #${idx + 1} 原始数据:\n` + JSON.stringify(element)
+          result += `\n[Forward ${idx + 1}]:\n` + JSON.stringify(element)
         }
       })
       return h('message', [h('code', { lang: 'text' }, result)])
