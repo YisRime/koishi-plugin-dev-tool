@@ -22,7 +22,6 @@ export class BackupService {
     this.ctx = ctx
     this.config = config
 
-    this.ensureBackupDir()
     if (this.config.autoBackup && this.config.interval > 0) {
       this.setupAutoBackup(this.config.interval)
     }
@@ -403,6 +402,7 @@ export class BackupService {
    * @private
    */
   private async listBackups(): Promise<{timestamp: string, tables?: string[]}[]> {
+    this.ensureBackupDir()
     const files = await fs.readdir(this.config.dir)
 
     if (this.config.singleFile) {
