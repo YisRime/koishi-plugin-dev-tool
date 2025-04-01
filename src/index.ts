@@ -41,10 +41,15 @@ export const Config: Schema<Config> = Schema.object({
  * @param options - 格式化选项
  * @returns 格式化后的字符串
  */
-export function formatInspect(data: any, options: { depth?: number, colors?: boolean } = {}): string {
+export function formatInspect(data: any, options: { depth?: number, colors?: boolean, showHidden?: boolean } = {}): string {
   return inspect(data, {
     depth: options.depth ?? Infinity,
-    colors: options.colors ?? false
+    colors: options.colors ?? false,
+    showHidden: options.showHidden ?? false,
+    maxArrayLength: null,
+    maxStringLength: null,
+    getters: true,
+    compact: false
   });
 }
 
@@ -152,7 +157,7 @@ export function apply(ctx: Context, config: Config = {}) {
   dbService.initialize();
   backupService.registerBackupCommands(dbService.Command);
 
-  const ins = ctx.command('inspect')
+  const ins = ctx.command('inspect', '获取当前平台ID')
 
   /**
    * 检查消息元素命令
@@ -163,7 +168,6 @@ export function apply(ctx: Context, config: Config = {}) {
     .action(async ({ session, options }) => {
       let elements
       const messageId = options.id
-
       if (messageId) {
         try {
           const message = await session.bot.getMessage(session.channelId, messageId)
@@ -175,7 +179,6 @@ export function apply(ctx: Context, config: Config = {}) {
       } else {
         elements = session.quote ? session.quote.elements : session.elements
       }
-
       const jsons = []
       elements = elements.map((element) => {
         if (element.type === 'json') {
@@ -184,51 +187,63 @@ export function apply(ctx: Context, config: Config = {}) {
         }
         return element
       })
-
       let result = inspect(elements, { depth: Infinity })
       if (jsons.length) {
         result += '\n' + jsons.map((data, index) =>
           `[JSON ${index + 1}]:\n${inspect(data, { depth: Infinity })}`
         ).join('\n')
       }
-
       return h.text(result)
     })
 
   /**
    * 获取原始消息内容命令
    */
-  ins.subcommand('msg', '获取原始消息内容')
+  ins.subcommand('content', '获取原始内容')
     .option('id', '-i <messageId:string> 指定消息ID')
     .usage('发送或回复消息以查看其原始内容，使用 -i 指定消息ID')
     .action(async ({ session, options }) => {
-      let content, elements
-      const messageId = options.id
-
+      const messageId = options.id;
       if (messageId) {
         try {
-          const message = await session.bot.getMessage(session.channelId, messageId)
-          if (!message) return '未找到指定消息'
-          content = message.content
-          elements = message.elements
+          const message = await session.bot.getMessage(session.channelId, messageId);
+          if (!message) return '未找到指定消息';
+          return h.text(message.content);
         } catch (error) {
-          return `获取消息失败: ${error.message}`
+          return `获取消息失败: ${error.message}`;
+        }
+      } else if (session.quote) {
+        try {
+          const quoteMessage = await session.bot.getMessage(session.channelId, session.quote.id);
+          if (!quoteMessage) return '未找到引用消息';
+          return h.text(quoteMessage.content);
+        } catch (error) {
+          return `获取引用消息失败: ${error.message}`;
         }
       } else {
-        content = session.quote ? session.quote.content : session.content
-        elements = session.quote ? session.quote.elements : session.elements
+        return h.text(session.event.message.content);
       }
-      // 返回原始内容
-      let result = content
-      // 显示原始数据
-      elements?.forEach((element, idx) => {
-        if (element.type === 'json' && element.attrs?.data) {
-          result += `\n[JSON ${idx + 1}]:\n` + element.attrs.data
-        }
-        if (element.type === 'forward') {
-          result += `\n[Forward ${idx + 1}]:\n` + JSON.stringify(element)
-        }
-      })
-      return h('message', [h('code', { lang: 'text' }, result)])
+    })
+
+  /**
+   * 获取消息ID命令
+   */
+  ins.subcommand('msgid', '获取消息ID')
+    .usage('发送或回复消息以获取其消息ID')
+    .action(async ({ session }) => {
+      if (session.quote) {
+        return `引用消息ID: ${session.quote.id}`;
+      } else {
+        return `当前消息ID: ${session.messageId}`;
+      }
+    })
+
+  /**
+   * 检查会话信息命令
+   */
+  ins.subcommand('session', '查看会话信息')
+    .usage('查看当前会话的信息')
+    .action(async ({ session }) => {
+      return h.text(formatInspect(session, { depth: Infinity }));
     })
 }
