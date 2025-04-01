@@ -1,7 +1,7 @@
 {
   "name": "koishi-plugin-dev-tool",
   "description": "开发工具，提供消息元素检查、原始消息查看以及数据库工具，可查询或删除数据，以及备份恢复数据库",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "contributors": [
     "Yis_Rime <yis_rime@outlook.com>"
   ],
