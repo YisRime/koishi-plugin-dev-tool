@@ -65,7 +65,7 @@ export const utils = {
     // 个人信息
     const personalInfo = []
     if (info.age) personalInfo.push(`年龄: ${info.age}岁`)
-    if (info.seex) personalInfo.push(`性别: ${info.seex}`)
+    if (info.sex) personalInfo.push(`性别: ${info.sex}`)
     if (info.birthday_year && info.birthday_month && info.birthday_day) {
       personalInfo.push(`生日: ${info.birthday_year}-${info.birthday_month}-${info.birthday_day}`)
     }
@@ -179,7 +179,7 @@ export const utils = {
 
     const personalInfo = []
     if (friend.remark && friend.remark.trim()) personalInfo.push(`备注: ${friend.remark}`)
-    if (friend.seex && friend.seex !== 'unknown') personalInfo.push(`性别: ${friend.seex}`)
+    if (friend.sex && friend.sex !== 'unknown') personalInfo.push(`性别: ${friend.sex}`)
     if (friend.age && friend.age > 0) personalInfo.push(`年龄: ${friend.age}岁`)
 
     const hasBirthday = (friend.birthday_year && friend.birthday_year > 0) ||
@@ -258,8 +258,8 @@ export const utils = {
     if (member.qq_level > 0) {
       personalInfo.push(`LV${member.qq_level}`)
     }
-    if (member.seex && member.seex !== 'unknown') {
-      personalInfo.push(`${member.seex}`)
+    if (member.sex && member.sex !== 'unknown') {
+      personalInfo.push(`${member.sex}`)
     }
     if (member.age > 0) {
       personalInfo.push(`${member.age}岁`)

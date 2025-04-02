@@ -20,7 +20,7 @@ interface OneBotUserInfo {
   birthday_month?: number     // 出生月
   birthday_day?: number       // 出生日
   age?: number                // 年龄
-  seex?: string               // 性别
+  sex?: string               // 性别
   kBloodType?: number         // 血型
   homeTown?: string           // 家乡 (格式: 省-市-区)
   country?: string            // 国家
@@ -63,7 +63,7 @@ interface OneBotGroupMemberInfo {
   user_id: number            // 用户ID
   nickname: string           // 昵称
   card: string               // 群名片/备注
-  seex: string               // 性别
+  sex: string               // 性别
   age: number                // 年龄
   area: string               // 地区
   level: string              // 成员等级
