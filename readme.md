@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/koishi-plugin-dev-tool?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-dev-tool)
 
-开发工具，提供消息元素检查、原始消息查看以及数据库工具，可查询或删除数据，以及备份恢复数据库
+开发工具，提供消息查看以及数据库工具，可查询或删除数据表，支持功能参见README
 
 ## 功能介绍
 
@@ -11,13 +11,19 @@
 - **数据库备份**：支持自动/手动备份，多种备份模式
 - **数据库恢复**：简便的数据恢复机制
 
+### OneBot管理工具
+
+- 提供丰富的信息查询功能，包括消息、图片、语音、合并转发等内容
+- 支持查询账号信息、群组信息、成员信息等
+- 提供OneBot实现重启、缓存清理等管理功能
+- 支持获取运行状态和版本信息
+
 ## 命令列表
 
 ### 消息检查命令
 
 | 命令 | 说明 | 示例 |
 |-----|------|------|
-| `inspect` | 获取当前平台ID | 在对应平台使用此命令 |
 | `inspect elements` | 检查消息元素结构 | 回复一条消息并使用此命令，或使用 -i 选项指定消息ID |
 | `inspect content` | 获取原始消息内容 | 回复一条消息并使用此命令，或使用 -i 选项指定消息ID |
 | `inspect msgid` | 获取消息ID | 发送或回复消息以获取其消息ID |
@@ -43,7 +49,33 @@
 | `db.backup` | 备份数据库 | `db.backup -t user,channel` |
 | `db.restore [序号]` | 恢复数据库 | `db.restore 1 -t user` |
 
-## 数据库命令参数
+### OneBot命令
+
+| 命令 | 说明 | 示例 |
+|-----|------|------|
+| `onebot.restart` | 重启 OneBot | `onebot.restart` |
+| `onebot.clean` | 清理缓存 | `onebot.clean` |
+| `get` | 获取消息内容及状态 | `get -i 1234567890` |
+| `get.forward` | 获取合并转发内容 | `get.forward -i 1234567890` |
+| `get.record` | 获取语音文件 | `get.record -f 1234.silk -t mp3` |
+| `get.image` | 获取图片文件 | `get.image -f abc.image` |
+| `get.stat` | 获取运行状态 | `get.stat` |
+| `get.ver` | 获取版本信息 | `get.ver` |
+| `get.csrf` | 获取相关接口凭证 | `get.csrf qun.qq.com` |
+| `info` | 查询账号信息 | `info` |
+| `info.user` | 查询其它账号信息 | `info.user 123456 -n` |
+| `info.friend` | 获取本账号好友列表 | `info.friend` |
+| `info.group` | 获取本账号群组列表 | `info.group` |
+| `group` | 查询群信息 | `group 123456 -n` |
+| `group.user` | 查询群成员信息 | `group.user 123456 654321 -n` |
+| `group.list` | 获取群成员列表 | `group.list 123456` |
+| `group.honor` | 查询群荣誉信息 | `group.honor 123456 -t talkative` |
+
+## 命令参数说明
+
+### inspect elements/content
+
+- `-i, --id <messageId>` - 指定要检查的消息ID
 
 ### db.query
 
@@ -77,40 +109,42 @@
 
 - `-t, --tables <表名>` - 指定要恢复的表(逗号分隔)
 
+### get/get.forward
+
+- `-i, --id <messageId>` - 指定消息ID
+
+### get.record
+
+- `-f, --file <file>` - 语音文件名
+- `-t, --format <format>` - 转换格式(mp3/amr/wma/m4a/spx/ogg/wav/flac)
+
+### get.image
+
+- `-f, --file <file>` - 图片文件名
+
+### get.csrf
+
+- `[domain]` - 可选，指定域名
+
+### info.user/group
+
+- `-n, --no-cache` - 不使用缓存
+
+### group.honor
+
+- `-t, --type <type>` - 荣誉类型(talkative/performer/legend/strong_newbie/emotion)
+
 ## 配置项
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |-------|------|-------|------|
+| `enableAdminCommands` | boolean | true | 启用 OneBot 管理命令 |
 | `autoBackup` | boolean | false | 启用自动备份 |
 | `singleFile` | boolean | false | 以单文件存储备份 |
 | `interval` | number | 24 | 自动备份间隔（小时） |
 | `keepBackups` | number | 7 | 保留备份数量（0为不限制） |
 | `dir` | string | './data/backups' | 备份存储目录 |
 | `tables` | string[] | [] | 特殊表名（如大写表名） |
-
-## 使用示例
-
-### 数据库备份与恢复
-
-#### 手动备份
-
-db.backup
-
-#### 备份特定表
-
-db.backup -t user,channel,group
-
-#### 查看可用备份
-
-db.restore
-
-#### 恢复备份
-
-db.restore 1
-
-#### 恢复特定表
-
-db.restore 1 -t user,channel
 
 ## 自动备份
 

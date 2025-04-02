@@ -1,5 +1,6 @@
 import { Context } from 'koishi';
-import { logger, formatInspect, formatAsTable } from './index';
+import { logger } from './index';
+import { formatAsTable, formatInspect } from './utils';
 
 /**
  * 数据库服务类
