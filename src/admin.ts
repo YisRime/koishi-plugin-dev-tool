@@ -266,30 +266,36 @@ export class Admin {
           return utils.handleError(session, e)
         }
       })
-    info.subcommand('.friend', '获取本账号好友列表', { authority: 3 })
+    info.subcommand('.friend [page:string]', '获取本账号好友列表', { authority: 3 })
       .usage('获取本账号的完整好友列表及备注')
-      .action(async ({ session }) => {
+      .action(async ({ session }, page) => {
         try {
           const friends = await session.onebot.getFriendList() as OneBotUserInfo[]
-          let result = `好友数量: ${friends.length}\n`
-          friends.slice(0, 10).forEach((friend) => {
-            result += utils.formatFriendInfo(friend)
-          })
-          return result
+          let result = `好友数量: ${friends.length}`;
+          const pagination = utils.handlePagination(session, friends, page);
+          if (!pagination) return;
+          result += pagination.pageInfo;
+          pagination.displayData.forEach((friend) => {
+            result += utils.formatFriendInfo(friend);
+          });
+          return result;
         } catch (e) {
           return utils.handleError(session, e)
         }
       })
-    info.subcommand('.group', '获取本账号群组列表', { authority: 3 })
+    info.subcommand('.group [page:string]', '获取本账号群组列表', { authority: 3 })
       .usage('获取本账号加入的群组列表')
-      .action(async ({ session }) => {
+      .action(async ({ session }, page) => {
         try {
           const groups = await session.onebot.getGroupList() as OneBotGroupInfo[]
-          let result = `群数量: ${groups.length}\n`
-          groups.slice(0, 20).forEach((group) => {
-            result += utils.formatGroupInfo(group) + '\n'
-          })
-          return result
+          let result = `群数量: ${groups.length}`;
+          const pagination = utils.handlePagination(session, groups, page);
+          if (!pagination) return;
+          result += pagination.pageInfo;
+          pagination.displayData.forEach((group) => {
+            result += utils.formatGroupInfo(group) + '\n';
+          });
+          return result;
         } catch (e) {
           return utils.handleError(session, e)
         }
@@ -338,9 +344,9 @@ export class Admin {
           return utils.handleError(session, e)
         }
       })
-    group.subcommand('.list [group_id:number]', '获取群成员列表')
+    group.subcommand('.list [group_id:number] [page:string]', '获取群成员列表')
       .usage('获取指定群的成员列表')
-      .action(async ({ session }, group_id) => {
+      .action(async ({ session }, group_id, page) => {
         if (!group_id) {
           if (!session.guildId) {
             const msg = await session.send('请提供群号')
@@ -351,22 +357,24 @@ export class Admin {
         }
         try {
           const members = await session.onebot.getGroupMemberList(group_id) as unknown as OneBotGroupMemberInfo[]
-          let result = `群 ${group_id} 成员列表：\n`
-          // 按角色排序
+          let result = `群 ${group_id} 成员列表`;
           members.sort((a, b) => {
             const roleOrder = { owner: 0, admin: 1, member: 2 }
             return roleOrder[a.role] - roleOrder[b.role]
           })
-          members.slice(0, 20).forEach((member) => {
-            result += utils.formatGroupMemberInfo(member) + '\n'
-          })
-          return result
+          const pagination = utils.handlePagination(session, members, page, 5);
+          if (!pagination) return;
+          result += pagination.pageInfo;
+          pagination.displayData.forEach((member) => {
+            result += utils.formatGroupMemberInfo(member) + '\n';
+          });
+          return result;
         } catch (e) {
           return utils.handleError(session, e)
         }
       })
     group.subcommand('.honor [group_id:number]', '查询群荣誉信息')
-      .usage('可用参数:\n- talkative: 龙王\n- performer: 群聊之火\n- legend: 群聊炽焰\n- strong_newbie: 冒尖小春笋\n- emotion: 快乐之源')
+      .usage('可用参数:\n- talkative: 历史龙王\n- performer: 群聊之火\n- legend: 群聊炽焰\n- strong_newbie: 冒尖小春笋\n- emotion: 快乐之源')
       .option('type', '-t <type> 荣誉类型', { fallback: 'all' })
       .action(async ({ session, options }, group_id) => {
         if (!group_id) {
@@ -381,21 +389,21 @@ export class Admin {
           const honorInfo = await session.onebot.getGroupHonorInfo(group_id, options.type)
           let result = `群 ${group_id} 荣誉信息:\n`
           const honorTypeNames = {
-            talkative: '龙王',
+            talkative: '历史龙王',
             performer: '群聊之火',
             legend: '群聊炽焰',
             strong_newbie: '冒尖小春笋',
             emotion: '快乐之源'
           }
           if (honorInfo.current_talkative) {
-            result += `当前龙王: ${honorInfo.current_talkative.nickname}(${honorInfo.current_talkative.user_id})\n`
+            result += `- 龙王: ${honorInfo.current_talkative.nickname}(${honorInfo.current_talkative.user_id})\n`
           }
           for (const type of ['talkative', 'performer', 'legend', 'strong_newbie', 'emotion']) {
             const list = honorInfo[`${type}_list`]
             if (list && list.length) {
               result += `${honorTypeNames[type]} (${list.length}名):\n`
               list.slice(0, 5).forEach((item) => {
-                result += `${item.nickname}(${item.user_id}) | ${item.description}\n`
+                result += `- ${item.nickname}(${item.user_id}) | ${item.description}\n`
               })
             }
           }

@@ -57,6 +57,47 @@ export const utils = {
   },
 
   /**
+   * 处理分页逻辑
+   * @param session 当前会话
+   * @param data 需要分页的数据数组
+   * @param page 页码参数，可以是数字或"all"
+   * @param pageSize 每页显示的项目数量，默认为10
+   * @returns 处理后的数据和分页信息对象，如果出错则返回null
+   */
+  handlePagination<T>(session: Session, data: T[], page: string, pageSize: number = 10): {
+    displayData: T[],
+    pageInfo: string,
+    totalPages: number
+  } | null {
+    try {
+      if (page === 'all') {
+        return {
+          displayData: data,
+          pageInfo: `：\n`,
+          totalPages: 1
+        };
+      }
+      const totalPages = Math.ceil(data.length / pageSize);
+      const pageNum = page ? parseInt(page) : 1;
+      // 页码有效性检查
+      if (isNaN(pageNum) || pageNum < 1 || (pageNum - 1) * pageSize >= data.length) {
+        this.handleError(session, new Error(`无效页码`));
+        return null;
+      }
+      const start = (pageNum - 1) * pageSize;
+      const end = pageNum * pageSize;
+      return {
+        displayData: data.slice(start, end),
+        pageInfo: `（第 ${pageNum}/${totalPages} 页）：\n`,
+        totalPages: totalPages
+      };
+    } catch (e) {
+      this.handleError(session, e);
+      return null;
+    }
+  },
+
+  /**
    * 格式化用户信息
    */
   formatUserInfo(info: any): string {
@@ -66,69 +107,82 @@ export const utils = {
     if (info.uid) result += `UID: ${info.uid}\n`
     const signature = info.long_nick || info.longNick
     if (signature) result += `个性签名: \n${signature}\n`
-
-    // 个人信息
+    result += '\n个人信息: \n'
+    // 基本个人信息
     const personalInfo = []
     if (info.sex && info.sex !== 'unknown') {
-      const displaySeex = sexMap[info.sex] || info.sex
-      personalInfo.push(`${displaySeex}`)
+      const displaySex = sexMap[info.sex] || info.sex
+      personalInfo.push(`${displaySex}`)
     }
     if (info.age) personalInfo.push(`${info.age}岁`)
     if (info.birthday_year && info.birthday_month && info.birthday_day) {
       personalInfo.push(`${info.birthday_year}-${info.birthday_month}-${info.birthday_day}`)
     }
-
-    // 添加生肖和星座信息
+    if (personalInfo.length > 0) {
+      result += `${personalInfo.join(' | ')}\n`
+    }
+    // 生肖、星座和血型信息
+    const zodiacInfo = []
     const shengXiaos = ['', '鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']
     if (info.shengXiao && info.shengXiao > 0 && info.shengXiao <= 12) {
-      personalInfo.push(`${shengXiaos[info.shengXiao]}`)
+      zodiacInfo.push(`${shengXiaos[info.shengXiao]}`)
     }
     const constellations = ['', '水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座', '摩羯座']
     if (info.constellation && info.constellation > 0 && info.constellation <= 12) {
-      personalInfo.push(`${constellations[info.constellation]}`)
+      zodiacInfo.push(`${constellations[info.constellation]}`)
     }
-
-    // 添加血型信息
     const bloodTypes = ['', 'A型', 'B型', 'AB型', 'O型']
     if (info.kBloodType && info.kBloodType > 0 && info.kBloodType < bloodTypes.length) {
-      personalInfo.push(`${bloodTypes[info.kBloodType]}`)
+      zodiacInfo.push(`${bloodTypes[info.kBloodType]}`)
     }
-
+    if (zodiacInfo.length > 0) {
+      result += `${zodiacInfo.join(' | ')}\n`
+    }
     // 联系信息
-    if (info.phoneNum && info.phoneNum !== '-') personalInfo.push(`电话: ${info.phoneNum}`)
-    if (info.eMail && info.eMail !== '') personalInfo.push(`邮箱: ${info.eMail}`)
-
-    // 位置信息
-    const locationInfo = []
-    if (info.country) locationInfo.push(info.country)
-    if (info.province) locationInfo.push(info.province)
-    if (info.city) locationInfo.push(info.city)
-    if (locationInfo.length > 0) {
-      personalInfo.push(`地区: ${locationInfo.join(' ')}`)
+    const contactInfo = []
+    if (info.phoneNum && info.phoneNum !== '-') contactInfo.push(`${info.phoneNum}`)
+    if (info.eMail && info.eMail !== '') contactInfo.push(`${info.eMail}`)
+    if (contactInfo.length > 0) {
+      result += `${contactInfo.join(' | ')}\n`
     }
+    // 位置信息
+    let locationLine = ''
+    // 地区信息
+    if (info.country || info.province || info.city) {
+      const locationItems = []
+      if (info.country) locationItems.push(info.country)
+      if (info.province) locationItems.push(info.province)
+      if (info.city) locationItems.push(info.city)
+      if (locationItems.length > 0) {
+        locationLine += `${locationItems.join(' ')}`
+      }
+    }
+    // 家乡信息
     if (info.homeTown && info.homeTown !== '0-0-0') {
       const [province, city] = info.homeTown.split('-').map(id => parseInt(id))
       if (province > 0 || city > 0) {
-        personalInfo.push(`家乡: ${province}-${city}`)
+        if (locationLine) locationLine += ' | '
+        locationLine += `家乡: ${province}-${city}`
       }
     }
-
-    // 学校和职位信息
-    if (info.college) personalInfo.push(`${info.college}`)
-    if (info.pos) personalInfo.push(`${info.pos}`)
-
-    if (personalInfo.length > 0) {
-      result += `\n个人信息: \n${personalInfo.join(' | ')}\n`
+    if (locationLine) {
+      result += `${locationLine}\n`
     }
-
+    // 学校和职位信息
+    const educationInfo = []
+    if (info.college) educationInfo.push(`${info.college}`)
+    if (info.pos) educationInfo.push(`${info.pos}`)
+    if (educationInfo.length > 0) {
+      result += `${educationInfo.join(' | ')}\n`
+    }
     // 账号和状态信息
+    result += '\n账号信息: \n'
     const accountInfo = []
-    if (info.qqLevel) accountInfo.push(`Lv:${info.qqLevel}`)
     if (info.is_vip || info.vip_level) {
-      let vipStr = info.is_years_vip ? `年VIP:${info.vip_level || ''}` : `VIP:${info.vip_level || ''}`
+      let vipStr = info.is_years_vip ? `年VIP${info.vip_level || ''}` : `VIP${info.vip_level || ''}`
       accountInfo.push(vipStr)
     }
-
+    if (info.qqLevel) accountInfo.push(`Lv:${info.qqLevel}`)
     // 状态信息
     if (info.status !== undefined) {
       const statusMap = {
@@ -140,26 +194,21 @@ export const utils = {
         60: '隐身'
       }
       if (statusMap[info.status]) {
-        let statusParts = []
-        statusParts.push(statusMap[info.status])
-
+        accountInfo.push(`${statusMap[info.status]}`)
+        // 电池信息
         if (info.batteryStatus && info.batteryStatus >= 0 && info.batteryStatus <= 100) {
-          statusParts.push(`${info.batteryStatus}%`)
+          accountInfo.push(`电量${info.batteryStatus}%`)
         }
-
+        // 设备信息
         const termTypes = ['', '电脑', '手机', '网页', '平板']
-        let deviceInfo = []
         if (info.termType && info.termType > 0 && info.termType < termTypes.length) {
-          deviceInfo.push(termTypes[info.termType])
+          let deviceStr = termTypes[info.termType]
+          if (info.termDesc && info.termDesc.trim()) {
+            deviceStr += `(${info.termDesc})`
+          }
+          accountInfo.push(deviceStr)
         }
-        if (info.termDesc && info.termDesc.trim()) {
-          deviceInfo.push(info.termDesc)
-        }
-
-        if (deviceInfo.length > 0) {
-          statusParts.push(deviceInfo.join('(') + ')')
-        }
-
+        // 网络信息
         const netTypes = ['', 'WiFi', '移动网络', '有线网络']
         const eNetworkTypes = {
           1: '2G网络',
@@ -168,39 +217,32 @@ export const utils = {
           4: '5G网络',
           5: 'WiFi'
         }
-        let networkInfo = []
+        const networkInfo = []
         if (info.netType && info.netType > 0 && info.netType < netTypes.length) {
           networkInfo.push(netTypes[info.netType])
         }
         if (info.eNetworkType && eNetworkTypes[info.eNetworkType]) {
           networkInfo.push(eNetworkTypes[info.eNetworkType])
         }
-
         if (networkInfo.length > 0) {
-          statusParts.push(networkInfo.join('-'))
-        }
-
-        if (statusParts.length > 0) {
-          accountInfo.push(`状态: ${statusParts.join(' - ')}`)
+          accountInfo.push(networkInfo.join('-'))
         }
       }
     }
-
+    // 显示账号信息
+    if (accountInfo.length > 0) {
+      result += `${accountInfo.join(' | ')}\n`
+    }
     // 注册时间和登录天数
     if (info.regTime || info.reg_time) {
       const regTimestamp = info.regTime || info.reg_time
       const regDate = new Date(regTimestamp * 1000)
       let regInfo = `注册于: ${regDate.toLocaleDateString()}`
       if (info.login_days) {
-        regInfo += `(登录${info.login_days}天)`
+        regInfo += ` (登录${info.login_days}天)`
       }
-      accountInfo.push(regInfo)
+      result += `${regInfo}\n`
     }
-
-    if (accountInfo.length > 0) {
-      result += `\n账号信息: \n${accountInfo.join(' | ')}\n`
-    }
-
     return result
   },
 
@@ -215,8 +257,8 @@ export const utils = {
     const personalInfo = []
     if (friend.remark && friend.remark.trim()) personalInfo.push(`${friend.remark}`)
     if (friend.sex && friend.sex !== 'unknown') {
-      const displaySeex = sexMap[friend.sex] || friend.sex
-      personalInfo.push(`${displaySeex}`)
+      const displaySex = sexMap[friend.sex] || friend.sex
+      personalInfo.push(`${displaySex}`)
     }
     if (friend.age && friend.age > 0) personalInfo.push(`${friend.age}岁`)
 
@@ -231,7 +273,7 @@ export const utils = {
     }
 
     if (personalInfo.length > 0) {
-      result += `  ${personalInfo.join(' | ')}\n`
+      result += `- ${personalInfo.join(' | ')}\n`
     }
 
     const contactInfo = []
@@ -240,7 +282,7 @@ export const utils = {
     }
     if (friend.email && friend.email.trim()) contactInfo.push(`${friend.email}`)
     if (contactInfo.length > 0) {
-      result += `  ${contactInfo.join(' | ')}\n`
+      result += `- ${contactInfo.join(' | ')}\n`
     }
 
     return result
@@ -252,7 +294,7 @@ export const utils = {
   formatGroupInfo(info: any): string {
     let result = `${info.group_name}(${info.group_id}) [${info.member_count}/${info.max_member_count}]`
     if (info.group_remark && info.group_remark.trim()) {
-      result += `\n  ${info.group_remark}`
+      result += `\n备注: ${info.group_remark}`
     }
     return result
   },
@@ -293,7 +335,7 @@ export const utils = {
       identityInfo.push('Bot')
     }
     if (identityInfo.length > 0) {
-      result += `${identityInfo.join(' | ')}\n`
+      result += `- ${identityInfo.join(' | ')}\n`
     }
 
     // 基本信息
@@ -302,8 +344,8 @@ export const utils = {
       personalInfo.push(`LV${member.qq_level}`)
     }
     if (member.sex && member.sex !== 'unknown') {
-      const displaySeex = sexMap[member.sex] || member.sex
-      personalInfo.push(`${displaySeex}`)
+      const displaySex = sexMap[member.sex] || member.sex
+      personalInfo.push(`${member.sex}`)
     }
     if (member.age > 0) {
       personalInfo.push(`${member.age}岁`)
@@ -312,21 +354,21 @@ export const utils = {
       personalInfo.push(`${member.area}`)
     }
     if (personalInfo.length > 0) {
-      result += `${personalInfo.join(' | ')}\n`
+      result += `- ${personalInfo.join(' | ')}\n`
     }
 
     // 时间信息
     if (member.shut_up_timestamp && member.shut_up_timestamp > Math.floor(Date.now() / 1000)) {
       const shutUpEnd = new Date(member.shut_up_timestamp * 1000)
-      result += `禁言至: ${shutUpEnd.toLocaleDateString()} ${shutUpEnd.toLocaleTimeString()}\n`
+      result += `- 禁言至: ${shutUpEnd.toLocaleDateString()} ${shutUpEnd.toLocaleTimeString()}\n`
     }
     if (member.join_time) {
       const joinDate = new Date(member.join_time * 1000)
-      result += `入群时间: ${joinDate.toLocaleDateString()} ${joinDate.toLocaleTimeString()}\n`
+      result += `- 入群时间: ${joinDate.toLocaleDateString()} ${joinDate.toLocaleTimeString()}\n`
     }
     if (member.last_sent_time) {
       const lastSentDate = new Date(member.last_sent_time * 1000)
-      result += `最后发言: ${lastSentDate.toLocaleDateString()} ${lastSentDate.toLocaleTimeString()}`
+      result += `- 最后发言: ${lastSentDate.toLocaleDateString()} ${lastSentDate.toLocaleTimeString()}`
     }
 
     return result
@@ -356,7 +398,7 @@ export const utils = {
       return jsonMatch[1]
     }
 
-    return null
+    return null;
   },
 
   /**
