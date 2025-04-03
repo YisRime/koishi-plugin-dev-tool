@@ -1,6 +1,11 @@
 import { Session, h } from 'koishi';
 import { inspect } from 'util';
 
+const sexMap = {
+  'male': '男',
+  'female': '女'
+};
+
 /**
  * 工具函数集合
  */
@@ -64,26 +69,36 @@ export const utils = {
 
     // 个人信息
     const personalInfo = []
-    if (info.age) personalInfo.push(`年龄: ${info.age}岁`)
-    if (info.sex) personalInfo.push(`性别: ${info.sex}`)
+    if (info.sex && info.sex !== 'unknown') {
+      const displaySeex = sexMap[info.sex] || info.sex
+      personalInfo.push(`${displaySeex}`)
+    }
+    if (info.age) personalInfo.push(`${info.age}岁`)
     if (info.birthday_year && info.birthday_month && info.birthday_day) {
-      personalInfo.push(`生日: ${info.birthday_year}-${info.birthday_month}-${info.birthday_day}`)
+      personalInfo.push(`${info.birthday_year}-${info.birthday_month}-${info.birthday_day}`)
+    }
+
+    // 添加生肖和星座信息
+    const shengXiaos = ['', '鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']
+    if (info.shengXiao && info.shengXiao > 0 && info.shengXiao <= 12) {
+      personalInfo.push(`${shengXiaos[info.shengXiao]}`)
     }
     const constellations = ['', '水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座', '摩羯座']
-    const shengXiaos = ['', '鼠', '牛', '虎', '兔', '龙', '蛇', '马', '羊', '猴', '鸡', '狗', '猪']
     if (info.constellation && info.constellation > 0 && info.constellation <= 12) {
-      personalInfo.push(`星座: ${constellations[info.constellation]}`)
+      personalInfo.push(`${constellations[info.constellation]}`)
     }
-    if (info.shengXiao && info.shengXiao > 0 && info.shengXiao <= 12) {
-      personalInfo.push(`生肖: ${shengXiaos[info.shengXiao]}`)
-    }
+
+    // 添加血型信息
     const bloodTypes = ['', 'A型', 'B型', 'AB型', 'O型']
     if (info.kBloodType && info.kBloodType > 0 && info.kBloodType < bloodTypes.length) {
-      personalInfo.push(`血型: ${bloodTypes[info.kBloodType]}`)
+      personalInfo.push(`${bloodTypes[info.kBloodType]}`)
     }
-    if (info.eMail && info.eMail !== '') personalInfo.push(`邮箱: ${info.eMail}`)
-    if (info.phoneNum && info.phoneNum !== '-') personalInfo.push(`电话: ${info.phoneNum}`)
 
+    // 联系信息
+    if (info.phoneNum && info.phoneNum !== '-') personalInfo.push(`电话: ${info.phoneNum}`)
+    if (info.eMail && info.eMail !== '') personalInfo.push(`邮箱: ${info.eMail}`)
+
+    // 位置信息
     const locationInfo = []
     if (info.country) locationInfo.push(info.country)
     if (info.province) locationInfo.push(info.province)
@@ -97,21 +112,24 @@ export const utils = {
         personalInfo.push(`家乡: ${province}-${city}`)
       }
     }
-    if (info.college) personalInfo.push(`学校: ${info.college}`)
-    if (info.pos) personalInfo.push(`职位: ${info.pos}`)
+
+    // 学校和职位信息
+    if (info.college) personalInfo.push(`${info.college}`)
+    if (info.pos) personalInfo.push(`${info.pos}`)
+
     if (personalInfo.length > 0) {
-      result += `\n个人信息: \n${personalInfo.join('\n')}\n`
+      result += `\n个人信息: \n${personalInfo.join(' | ')}\n`
     }
 
     // 账号和状态信息
     const accountInfo = []
-    if (info.qqLevel) accountInfo.push(`QQ等级: ${info.qqLevel}`)
+    if (info.qqLevel) accountInfo.push(`Lv:${info.qqLevel}`)
     if (info.is_vip || info.vip_level) {
-      let vipStr = `VIP状态: ${info.is_vip ? 'VIP会员' : '非VIP'}`
-      if (info.is_years_vip) vipStr += `(年费会员)`
-      if (info.vip_level) vipStr += ` 等级${info.vip_level}`
+      let vipStr = info.is_years_vip ? `年VIP:${info.vip_level || ''}` : `VIP:${info.vip_level || ''}`
       accountInfo.push(vipStr)
     }
+
+    // 状态信息
     if (info.status !== undefined) {
       const statusMap = {
         10: '离线',
@@ -122,25 +140,27 @@ export const utils = {
         60: '隐身'
       }
       if (statusMap[info.status]) {
-        let statusStr = `状态: ${statusMap[info.status]}`
+        let statusParts = []
+        statusParts.push(statusMap[info.status])
+
+        if (info.batteryStatus && info.batteryStatus >= 0 && info.batteryStatus <= 100) {
+          statusParts.push(`${info.batteryStatus}%`)
+        }
+
         const termTypes = ['', '电脑', '手机', '网页', '平板']
+        let deviceInfo = []
         if (info.termType && info.termType > 0 && info.termType < termTypes.length) {
-          statusStr += ` - ${termTypes[info.termType]}`
+          deviceInfo.push(termTypes[info.termType])
         }
+        if (info.termDesc && info.termDesc.trim()) {
+          deviceInfo.push(info.termDesc)
+        }
+
+        if (deviceInfo.length > 0) {
+          statusParts.push(deviceInfo.join('(') + ')')
+        }
+
         const netTypes = ['', 'WiFi', '移动网络', '有线网络']
-        if (info.netType && info.netType > 0 && info.netType < netTypes.length) {
-          statusStr += ` - ${netTypes[info.netType]}`
-        }
-        accountInfo.push(statusStr)
-        if (info.extStatus) {
-          accountInfo.push(`扩展状态: ${info.extStatus}`)
-        }
-        if (info.batteryStatus) {
-          const batteryLevel = info.batteryStatus >= 0 && info.batteryStatus <= 100
-            ? `${info.batteryStatus}%`
-            : info.batteryStatus
-          accountInfo.push(`电池电量: ${batteryLevel}`)
-        }
         const eNetworkTypes = {
           1: '2G网络',
           2: '3G网络',
@@ -148,22 +168,37 @@ export const utils = {
           4: '5G网络',
           5: 'WiFi'
         }
-        if (info.eNetworkType && eNetworkTypes[info.eNetworkType]) {
-          accountInfo.push(`网络类型: ${eNetworkTypes[info.eNetworkType]}`)
+        let networkInfo = []
+        if (info.netType && info.netType > 0 && info.netType < netTypes.length) {
+          networkInfo.push(netTypes[info.netType])
         }
-        if (info.termDesc && info.termDesc.trim()) {
-          accountInfo.push(`终端信息: ${info.termDesc}`)
+        if (info.eNetworkType && eNetworkTypes[info.eNetworkType]) {
+          networkInfo.push(eNetworkTypes[info.eNetworkType])
+        }
+
+        if (networkInfo.length > 0) {
+          statusParts.push(networkInfo.join('-'))
+        }
+
+        if (statusParts.length > 0) {
+          accountInfo.push(`状态: ${statusParts.join(' - ')}`)
         }
       }
     }
+
+    // 注册时间和登录天数
     if (info.regTime || info.reg_time) {
       const regTimestamp = info.regTime || info.reg_time
       const regDate = new Date(regTimestamp * 1000)
-      accountInfo.push(`注册时间: ${regDate.toLocaleDateString()}`)
+      let regInfo = `注册于: ${regDate.toLocaleDateString()}`
+      if (info.login_days) {
+        regInfo += `(登录${info.login_days}天)`
+      }
+      accountInfo.push(regInfo)
     }
-    if (info.login_days) accountInfo.push(`登录天数: ${info.login_days}天`)
+
     if (accountInfo.length > 0) {
-      result += `\n账号信息: \n${accountInfo.join('\n')}\n`
+      result += `\n账号信息: \n${accountInfo.join(' | ')}\n`
     }
 
     return result
@@ -174,13 +209,16 @@ export const utils = {
    */
   formatFriendInfo(friend: any): string {
     let result = `${friend.nickname}(${friend.user_id})`
-    if (friend.level) result += ` | 等级: ${friend.level}`
+    if (friend.level) result += ` | LV:${friend.level}`
     result += '\n'
 
     const personalInfo = []
-    if (friend.remark && friend.remark.trim()) personalInfo.push(`备注: ${friend.remark}`)
-    if (friend.sex && friend.sex !== 'unknown') personalInfo.push(`性别: ${friend.sex}`)
-    if (friend.age && friend.age > 0) personalInfo.push(`年龄: ${friend.age}岁`)
+    if (friend.remark && friend.remark.trim()) personalInfo.push(`${friend.remark}`)
+    if (friend.sex && friend.sex !== 'unknown') {
+      const displaySeex = sexMap[friend.sex] || friend.sex
+      personalInfo.push(`${displaySeex}`)
+    }
+    if (friend.age && friend.age > 0) personalInfo.push(`${friend.age}岁`)
 
     const hasBirthday = (friend.birthday_year && friend.birthday_year > 0) ||
                        (friend.birthday_month && friend.birthday_month > 0) ||
@@ -189,7 +227,7 @@ export const utils = {
       const year = friend.birthday_year && friend.birthday_year > 0 ? friend.birthday_year : '?'
       const month = friend.birthday_month && friend.birthday_month > 0 ? friend.birthday_month : '?'
       const day = friend.birthday_day && friend.birthday_day > 0 ? friend.birthday_day : '?'
-      personalInfo.push(`生日: ${year}-${month}-${day}`)
+      personalInfo.push(`${year}-${month}-${day}`)
     }
 
     if (personalInfo.length > 0) {
@@ -198,9 +236,9 @@ export const utils = {
 
     const contactInfo = []
     if (friend.phone_num && friend.phone_num.trim() && friend.phone_num !== '-') {
-      contactInfo.push(`电话: ${friend.phone_num}`)
+      contactInfo.push(`${friend.phone_num}`)
     }
-    if (friend.email && friend.email.trim()) contactInfo.push(`邮箱: ${friend.email}`)
+    if (friend.email && friend.email.trim()) contactInfo.push(`${friend.email}`)
     if (contactInfo.length > 0) {
       result += `  ${contactInfo.join(' | ')}\n`
     }
@@ -214,7 +252,7 @@ export const utils = {
   formatGroupInfo(info: any): string {
     let result = `${info.group_name}(${info.group_id}) [${info.member_count}/${info.max_member_count}]`
     if (info.group_remark && info.group_remark.trim()) {
-      result += `\n  备注: ${info.group_remark}`
+      result += `\n  ${info.group_remark}`
     }
     return result
   },
@@ -229,7 +267,13 @@ export const utils = {
       'member': '成员'
     }
 
-    let result = `成员 ${member.nickname}(${member.user_id}) 信息:\n`
+    let result = `成员 `
+
+    // 显示群名片和昵称
+    if (member.card && member.card.trim()) {
+      result += `[${member.card}]`
+    }
+    result += `${member.nickname}(${member.user_id}) 信息:\n`
 
     // 身份信息
     let identityInfo = []
@@ -249,9 +293,8 @@ export const utils = {
       identityInfo.push('Bot')
     }
     if (identityInfo.length > 0) {
-      result += `${identityInfo.join(' | ')}`
+      result += `${identityInfo.join(' | ')}\n`
     }
-    result += '\n'
 
     // 基本信息
     let personalInfo = []
@@ -259,7 +302,8 @@ export const utils = {
       personalInfo.push(`LV${member.qq_level}`)
     }
     if (member.sex && member.sex !== 'unknown') {
-      personalInfo.push(`${member.sex}`)
+      const displaySeex = sexMap[member.sex] || member.sex
+      personalInfo.push(`${displaySeex}`)
     }
     if (member.age > 0) {
       personalInfo.push(`${member.age}岁`)

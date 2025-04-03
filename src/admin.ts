@@ -379,9 +379,7 @@ export class Admin {
         }
         try {
           const honorInfo = await session.onebot.getGroupHonorInfo(group_id, options.type)
-          const groupInfo = await session.onebot.getGroupInfo(group_id)
-          let result = `${groupInfo.group_name}(${group_id}) 荣誉信息:\n`
-
+          let result = `群 ${group_id} 荣誉信息:\n`
           const honorTypeNames = {
             talkative: '龙王',
             performer: '群聊之火',
