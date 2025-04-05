@@ -79,6 +79,15 @@ interface OneBotGroupMemberInfo {
   title: string              // 专属头衔
 }
 
+// 添加文件信息接口
+interface OneBotFileInfo {
+  file?: string       // 文件路径
+  url?: string        // 文件链接
+  file_size?: string  // 文件大小
+  file_name?: string  // 文件名称
+  base64?: string     // 文件Base64编码
+}
+
 export class Admin {
   constructor(private ctx: Context) {}
 
@@ -188,6 +197,40 @@ export class Admin {
         try {
           const result = await session.onebot.getImage(fileName)
           return `图片文件路径: ${result.file}`
+        } catch (e) {
+          return utils.handleError(session, e)
+        }
+      })
+    get.subcommand('.file', '获取文件信息')
+      .usage('获取指定文件ID对应的文件信息')
+      .option('id', '-i <id:string> 文件ID')
+      .action(async ({ session, options }) => {
+        let fileId = options.id
+        if (!fileId && session.quote) {
+          try {
+            fileId = utils.extractFileId(session.quote.content)
+          } catch (e) {
+            return utils.handleError(session, new Error(`解析引用消息失败: ${e.message}`))
+          }
+        }
+        if (!fileId) {
+          const msg = await session.send('未发现文件')
+          utils.autoRecall(session, Array.isArray(msg) ? msg[0] : msg)
+          return
+        }
+        try {
+          const fileInfo = await session.onebot._request('get_file', {
+            file_id: fileId
+          }) as OneBotFileInfo
+          let result = '文件信息:\n'
+          if (fileInfo.file_name) result += `文件名: ${fileInfo.file_name}\n`
+          if (fileInfo.file_size) result += `文件大小: ${fileInfo.file_size}\n`
+          if (fileInfo.file) result += `文件路径: ${fileInfo.file}\n`
+          if (fileInfo.url) result += `文件链接: ${fileInfo.url}\n`
+          if (fileInfo.base64) {
+            result += `文件Base64长度: ${fileInfo.base64.length}字符\n`
+          }
+          return result
         } catch (e) {
           return utils.handleError(session, e)
         }

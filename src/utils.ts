@@ -379,25 +379,44 @@ export const utils = {
    */
   extractAudioFile(content: string): string {
     if (!content) return null
-
     // 尝试从XML格式解析
     const xmlMatch = /<audio.*?file="(.*?)".*?\/>/i.exec(content)
     if (xmlMatch && xmlMatch[1]) {
       return xmlMatch[1]
     }
-
     // 尝试从CQ码解析
     const cqMatch = /\[CQ:record,file=(.*?)(?:,|])/i.exec(content)
     if (cqMatch && cqMatch[1]) {
       return cqMatch[1]
     }
-
     // 尝试从JSON格式解析
     const jsonMatch = /"file"\s*:\s*"([^"]+)"/i.exec(content)
     if (jsonMatch && jsonMatch[1]) {
       return jsonMatch[1]
     }
+    return null;
+  },
 
+  /**
+   * 从引用消息中提取文件ID
+   */
+  extractFileId(content: string): string {
+    if (!content) return null
+    // 尝试从XML格式解析
+    const xmlMatch = /<file.*?id="(.*?)".*?\/>/i.exec(content)
+    if (xmlMatch && xmlMatch[1]) {
+      return xmlMatch[1]
+    }
+    // 尝试从CQ码解析
+    const cqMatch = /\[CQ:file,file=(?:.*?),id=(.*?)(?:,|])/i.exec(content)
+    if (cqMatch && cqMatch[1]) {
+      return cqMatch[1]
+    }
+    // 尝试从JSON格式解析
+    const jsonMatch = /"file_id"\s*:\s*"([^"]+)"/i.exec(content)
+    if (jsonMatch && jsonMatch[1]) {
+      return jsonMatch[1]
+    }
     return null;
   },
 
@@ -406,32 +425,27 @@ export const utils = {
    */
   extractImageFile(content: string): string {
     if (!content) return null
-
     // 尝试从XML格式解析
     const xmlMatch = /<image.*?file="([^"]+)".*?\/>/i.exec(content) ||
                     /<img.*?file="([^"]+)".*?\/>/i.exec(content)
     if (xmlMatch && xmlMatch[1]) {
       return xmlMatch[1]
     }
-
     // 尝试从CQ码解析
     const cqMatch = /\[CQ:image,(?:.*?,)?file=([^,\]]+)(?:,|])/i.exec(content)
     if (cqMatch && cqMatch[1]) {
       return cqMatch[1]
     }
-
     // 尝试从JSON格式解析
     const jsonMatch = /"file"(?:\s*):(?:\s*)"([^"]+)"/i.exec(content)
     if (jsonMatch && jsonMatch[1]) {
       return jsonMatch[1]
     }
-
     // 尝试从URL解析
     const urlMatch = /https?:\/\/[^\s"'<>]+\.(jpg|jpeg|png|gif|bmp|webp)/i.exec(content)
     if (urlMatch && urlMatch[0]) {
       return urlMatch[0]
     }
-
     return null
   }
 }
