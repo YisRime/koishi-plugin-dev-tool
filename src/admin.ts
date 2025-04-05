@@ -240,33 +240,46 @@ export class Admin {
         }
       })
 
-    const info = admin.subcommand('info', '查询账号信息')
+    const info = admin.subcommand('info', '查询账号信息', { authority: 5 })
       .usage('查询当前账号的基本信息')
-      .action(async ({ session }) => {
+      .option('no-cache', '-n 不使用缓存', { fallback: false })
+      .action(async ({ session, options }) => {
         try {
-          const info = await session.onebot.getLoginInfo()
-          return `账号信息:\n${info.nickname}(${info.user_id})`
+          const loginInfo = await session.onebot.getLoginInfo()
+          try {
+            const detailInfo = await session.onebot.getStrangerInfo(loginInfo.user_id, options['no-cache']) as OneBotUserInfo
+            return utils.formatUserInfo(detailInfo)
+          } catch (detailError) {
+            return `账号信息:\n${loginInfo.nickname}(${loginInfo.user_id})`
+          }
         } catch (e) {
           return utils.handleError(session, e)
         }
       })
-    info.subcommand('.user <user_id:number>', '查询其它账号信息')
+    info.subcommand('.user <user_id:string>', '查询其它账号信息')
       .usage('查询指定账号的基本信息')
       .option('no-cache', '-n 不使用缓存', { fallback: false })
       .action(async ({ session, options }, user_id) => {
-        if (!user_id) {
-          const msg = await session.send('请提供QQ')
+        const parsedId = utils.parseTarget(user_id);
+        if (!parsedId) {
+          const msg = await session.send('请提供QQ号')
           utils.autoRecall(session, Array.isArray(msg) ? msg[0] : msg)
           return
         }
         try {
-          const info = await session.onebot.getStrangerInfo(user_id, options['no-cache']) as OneBotUserInfo
+          const botInfo = await session.onebot.getLoginInfo()
+          if (parsedId === botInfo.user_id.toString()) {
+            const msg = await session.send('不允许查询自身信息')
+            utils.autoRecall(session, Array.isArray(msg) ? msg[0] : msg)
+            return
+          }
+          const info = await session.onebot.getStrangerInfo(parseInt(parsedId), options['no-cache']) as OneBotUserInfo
           return utils.formatUserInfo(info)
         } catch (e) {
           return utils.handleError(session, e)
         }
       })
-    info.subcommand('.friend [page:string]', '获取本账号好友列表', { authority: 3 })
+    info.subcommand('.friend [page:string]', '获取本账号好友列表', { authority: 4 })
       .usage('获取本账号的完整好友列表及备注')
       .action(async ({ session }, page) => {
         try {
@@ -283,7 +296,7 @@ export class Admin {
           return utils.handleError(session, e)
         }
       })
-    info.subcommand('.group [page:string]', '获取本账号群组列表', { authority: 3 })
+    info.subcommand('.group [page:string]', '获取本账号群组列表', { authority: 4 })
       .usage('获取本账号加入的群组列表')
       .action(async ({ session }, page) => {
         try {
@@ -320,11 +333,12 @@ export class Admin {
           return utils.handleError(session, e)
         }
       })
-    group.subcommand('.user <user_id:number> [group_id:number]', '查询群成员信息')
+    group.subcommand('.user <user_id:string> [group_id:number]', '查询群成员信息')
       .usage('查询群内指定成员的基本信息')
       .option('no-cache', '-n 不使用缓存', { fallback: false })
       .action(async ({ session, options }, user_id, group_id) => {
-        if (!user_id) {
+        const parsedId = utils.parseTarget(user_id);
+        if (!parsedId) {
           const msg = await session.send('请提供QQ号')
           utils.autoRecall(session, Array.isArray(msg) ? msg[0] : msg)
           return
@@ -338,7 +352,7 @@ export class Admin {
           group_id = parseInt(session.guildId)
         }
         try {
-          const info = await session.onebot.getGroupMemberInfo(group_id, user_id, options['no-cache']) as unknown as OneBotGroupMemberInfo
+          const info = await session.onebot.getGroupMemberInfo(group_id, parseInt(parsedId), options['no-cache']) as unknown as OneBotGroupMemberInfo
           return utils.formatGroupMemberInfo(info)
         } catch (e) {
           return utils.handleError(session, e)
