@@ -111,8 +111,8 @@ export const utils = {
     // 基本个人信息
     const personalInfo = []
     if (info.sex && info.sex !== 'unknown') {
-      const displaySex = sexMap[info.sex] || info.sex
-      personalInfo.push(`${displaySex}`)
+      const displaysex = sexMap[info.sex] || info.sex
+      personalInfo.push(`${displaysex}`)
     }
     if (info.age) personalInfo.push(`${info.age}岁`)
     if (info.birthday_year && info.birthday_month && info.birthday_day) {
@@ -257,8 +257,8 @@ export const utils = {
     const personalInfo = []
     if (friend.remark && friend.remark.trim()) personalInfo.push(`${friend.remark}`)
     if (friend.sex && friend.sex !== 'unknown') {
-      const displaySex = sexMap[friend.sex] || friend.sex
-      personalInfo.push(`${displaySex}`)
+      const displaysex = sexMap[friend.sex] || friend.sex
+      personalInfo.push(`${displaysex}`)
     }
     if (friend.age && friend.age > 0) personalInfo.push(`${friend.age}岁`)
 
@@ -344,8 +344,8 @@ export const utils = {
       personalInfo.push(`LV${member.qq_level}`)
     }
     if (member.sex && member.sex !== 'unknown') {
-      const displaySex = sexMap[member.sex] || member.sex
-      personalInfo.push(`${member.sex}`)
+      const displaysex = sexMap[member.sex] || member.sex
+      personalInfo.push(`${displaysex}`)
     }
     if (member.age > 0) {
       personalInfo.push(`${member.age}岁`)

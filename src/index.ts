@@ -1,7 +1,7 @@
 import { Context, Schema, h, Logger } from 'koishi'
 import { BackupService } from './backup'
 import { DbService } from './dbtool'
-import { Admin } from './admin'
+import { Onebot } from './onebot'
 import { formatInspect } from './utils'
 
 /**
@@ -22,14 +22,14 @@ export interface Config {
   dir?: string
   keepBackups?: number
   singleFile?: boolean
-  enableAdminCommands?: boolean
+  enableOneBot?: boolean
 }
 
 /**
  * 插件配置Schema定义
  */
 export const Config: Schema<Config> = Schema.object({
-  enableAdminCommands: Schema.boolean().description('启用 OneBot 管理命令').default(true),
+  enableOneBot: Schema.boolean().description('OneBot 测试指令').default(false),
   autoBackup: Schema.boolean().description('启用自动备份').default(false),
   singleFile: Schema.boolean().description('以单文件存储备份').default(false),
   interval: Schema.number().description('自动备份间隔（小时）').default(24).min(1),
@@ -51,10 +51,10 @@ export function apply(ctx: Context, config: Config = {}) {
   // 初始化数据库命令并注册备份命令
   dbService.initialize();
   backupService.registerBackupCommands(dbService.Command);
-  // 根据配置决定是否注册 admin 命令
-  if (config.enableAdminCommands !== false) {
-    const adminService = new Admin(ctx);
-    adminService.registerCommands();
+  // 根据配置决定是否注册 OneBot 命令
+  if (config.enableOneBot !== false) {
+    const onebotService = new Onebot(ctx);
+    onebotService.registerCommands();
   }
 
   const ins = ctx.command('inspect', '查看详细信息')

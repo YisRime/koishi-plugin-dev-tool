@@ -88,16 +88,16 @@ interface OneBotFileInfo {
   base64?: string     // 文件Base64编码
 }
 
-export class Admin {
+export class Onebot {
   constructor(private ctx: Context) {}
 
   /**
    * 注册命令
    */
   registerCommands() {
-    const admin = this.ctx.command('onebot', 'OneBot 测试工具')
+    const onebot = this.ctx.command('onebot', 'OneBot 测试工具')
 
-    admin.subcommand('.restart', '重启 OneBot', { authority: 5 })
+    onebot.subcommand('.restart', '重启 OneBot', { authority: 5 })
       .usage('重启 OneBot 实现和 API 服务')
       .action(async ({ session }) => {
         try {
@@ -107,7 +107,7 @@ export class Admin {
           return utils.handleError(session, e)
         }
       })
-    admin.subcommand('.clean', '清理缓存', { authority: 4 })
+    onebot.subcommand('.clean', '清理缓存', { authority: 4 })
       .usage('清理积攒的缓存文件')
       .action(async ({ session }) => {
         try {
@@ -118,7 +118,7 @@ export class Admin {
         }
       })
 
-    const get = admin.subcommand('get', '获取消息内容及状态')
+    const get = onebot.subcommand('get', '获取消息内容及状态')
       .usage('获取指定ID消息的完整内容')
       .option('id', '-i <id:string> 消息ID')
       .action(async ({ session, options }) => {
@@ -283,7 +283,7 @@ export class Admin {
         }
       })
 
-    const info = admin.subcommand('info', '查询账号信息', { authority: 5 })
+    const info = onebot.subcommand('info', '查询账号信息', { authority: 5 })
       .usage('查询当前账号的基本信息')
       .option('no-cache', '-n 不使用缓存', { fallback: false })
       .action(async ({ session, options }) => {
@@ -357,7 +357,7 @@ export class Admin {
         }
       })
 
-    const group = admin.subcommand('group [group_id:number]', '查询群信息')
+    const group = onebot.subcommand('group [group_id:number]', '查询群信息')
       .usage('查询指定群的基本信息')
       .option('no-cache', '-n 不使用缓存', { fallback: false })
       .action(async ({ session, options }, group_id) => {

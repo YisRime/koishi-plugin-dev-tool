@@ -138,7 +138,7 @@
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |-------|------|-------|------|
-| `enableAdminCommands` | boolean | true | 启用 OneBot 管理命令 |
+| `enableOneBot` | boolean | true | 启用 OneBot 测试指令 |
 | `autoBackup` | boolean | false | 启用自动备份 |
 | `singleFile` | boolean | false | 以单文件存储备份 |
 | `interval` | number | 24 | 自动备份间隔（小时） |
