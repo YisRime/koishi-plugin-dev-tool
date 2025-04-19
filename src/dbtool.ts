@@ -60,8 +60,11 @@ export class DbService {
    * 注册所有数据库相关的子命令
    */
   initialize(): void {
-    this.Command = this.ctx.command('db [page]', '数据库工具', { authority: 4 })
-      .usage('查询和管理数据库\n- db [页码] - 显示数据库概览\n- db.all - 显示所有表')
+    this.Command = this.ctx.command('db', '数据库工具', { authority: 4 })
+      .usage('查询和管理数据库')
+    // 数据库概览命令
+    this.Command.subcommand('.list [page]', '列出数据库表')
+      .usage('列出数据库所有表\n- db.list [页码] - 显示数据库概览\n- db.list all - 显示所有表')
       .action(async ({ }, pageArg) => {
         try {
           const stats = await this.ctx.database.stats();
