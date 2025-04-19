@@ -39,8 +39,7 @@
 
 | 命令 | 说明 | 示例 |
 |-----|------|------|
-| `db [页码]` | 显示数据库概览 | `db 2` |
-| `db.all` | 显示所有表 | `db.all` |
+| `db.list [页码/all]` | 显示表列表 | `db.list 2` |
 | `db.query <表名>` | 查询表数据 | `db.query user -f {"authority":4} --page 2` |
 | `db.count <表名>` | 统计记录数 | `db.count message -f {"platform":"discord"}` |
 | `db.update <表名>` | 更新表数据 | `db.update user -m set -q {"id":123} -d {"authority":4}` |
