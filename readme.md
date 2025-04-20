@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/koishi-plugin-dev-tool?style=flat-square)](https://www.npmjs.com/package/koishi-plugin-dev-tool)
 
-开发工具，提供消息查看以及数据库工具，可查询或删除数据表，支持功能参见README
+解析消息，操作数据库表，查询 Onebot 相关信息，一些很有用的小工具
 
 ## 功能介绍
 
