@@ -19,7 +19,7 @@ export class BackupService {
    * @param ctx - Koishi上下文
    * @param config - 备份配置
    */
-  constructor(ctx: Context, config: Config = {}) {
+  constructor(ctx: Context, config: Config) {
     this.ctx = ctx
     this.config = config
 

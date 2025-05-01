@@ -1,7 +1,6 @@
 import { Context, Schema, h, Logger } from 'koishi'
 import { BackupService } from './backup'
 import { DbService } from './dbtool'
-import { Onebot } from './onebot'
 import { formatInspect } from './utils'
 
 export const name = 'dev-tool'
@@ -26,20 +25,18 @@ export const usage = `
  * 插件配置接口
  */
 export interface Config {
-  tables?: string[]
-  autoBackup?: boolean
-  interval?: number
-  dir?: string
-  keepBackups?: number
-  singleFile?: boolean
-  enableOneBot?: boolean
+  tables: string[]
+  autoBackup: boolean
+  interval: number
+  dir: string
+  keepBackups: number
+  singleFile: boolean
 }
 
 /**
  * 插件配置Schema定义
  */
 export const Config: Schema<Config> = Schema.object({
-  enableOneBot: Schema.boolean().description('启用 OneBot 相关指令').default(false),
   autoBackup: Schema.boolean().description('启用自动备份').default(false),
   singleFile: Schema.boolean().description('以单文件存储备份').default(false),
   interval: Schema.number().description('自动备份间隔（小时）').default(24).min(1),
@@ -53,7 +50,7 @@ export const Config: Schema<Config> = Schema.object({
  * @param ctx - Koishi上下文
  * @param config - 插件配置
  */
-export function apply(ctx: Context, config: Config = {}) {
+export function apply(ctx: Context, config: Config) {
   // 实例化服务
   const dbService = new DbService(ctx);
   const backupService = new BackupService(ctx, config);
@@ -61,11 +58,6 @@ export function apply(ctx: Context, config: Config = {}) {
   // 初始化数据库命令并注册备份命令
   dbService.initialize();
   backupService.registerBackupCommands(dbService.Command);
-  // 根据配置决定是否注册 OneBot 命令
-  if (config.enableOneBot !== false) {
-    const onebotService = new Onebot(ctx);
-    onebotService.registerCommands();
-  }
 
   const ins = ctx.command('inspect', '查看详细信息')
 
