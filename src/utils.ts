@@ -69,14 +69,11 @@ export function formatInspect(data: any, options: { depth?: number, colors?: boo
 export function formatAsTable(data: any[]): string {
   if (!data?.length) return '无数据';
 
-  const allKeys = [...new Set(data.flatMap(item => Object.keys(item)))];
-  const priorityKeys = ['id', 'name', 'userId', 'channelId', 'type', 'time', 'date', 'platform'];
-  let keys = allKeys.length > 5
-    ? priorityKeys.filter(k => allKeys.includes(k)).slice(0, 4) || allKeys.slice(0, 4)
-    : allKeys;
+  const keys = [...new Set(data.flatMap(item => Object.keys(item)))];
+
   // 计算每列的最大宽度
   const columnWidths = keys.map(key => {
-    const maxValueLength = Math.max(
+    return Math.max(
       key.length,
       ...data.map(item => {
         const value = item[key];
@@ -84,10 +81,9 @@ export function formatAsTable(data: any[]): string {
         if (typeof value === 'object') {
           return value instanceof Date ? 19 : 6;
         }
-        return String(value).length > 20 ? 20 : String(value).length;
+        return String(value).length;
       })
     );
-    return Math.min(maxValueLength, 20);
   });
   // 生成表头
   let table = keys.map((key, i) => key.padEnd(columnWidths[i])).join(' | ') + '\n';
@@ -102,9 +98,6 @@ export function formatAsTable(data: any[]): string {
         strValue = value instanceof Date ? value.toISOString().slice(0, 19) : '[对象]';
       } else {
         strValue = String(value);
-        if (strValue.length > 20) {
-          strValue = strValue.substring(0, 17) + '...';
-        }
       }
       return strValue.padEnd(columnWidths[i]);
     });
