@@ -49,6 +49,7 @@
 | `qgroup.clean` | 清理缓存 | `qgroup.clean` |
 | `get` | 获取消息内容及状态 | `get -i 1234567890` |
 | `get.forward` | 获取合并转发内容 | `get.forward -i 1234567890` |
+| `forward <nodes>` | 发送合并转发消息。使用 `\|\|` 分隔节点，`:` 分隔用户和内容。用户格式为 `QQ号` 或 `@成员`，省略时默认为发送者。 | `forward 12 A:一\|\|@34-B:二\|\|三` |
 | `get.record` | 获取语音文件 | `get.record -f 1234.silk -t mp3` |
 | `get.image` | 获取图片文件 | `get.image -f abc.image` |
 | `get.file` | 获取文件信息 | `get.file -i file_id` |
