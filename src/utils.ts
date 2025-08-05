@@ -27,13 +27,12 @@ export const utils = {
   /**
    * 处理错误并发送提示消息
    */
-  handleError(session: Session, error: any) {
+  async handleError(session: Session, error: any) {
     const errorMsg = error?.message || String(error);
-    return session.send(errorMsg).then(msg => {
-      if (typeof msg === 'string')
-        setTimeout(() => session.bot.deleteMessage(session.channelId, msg).catch(() => {}), 10000);
-      return null;
-    });
+    const msg = await session.send(errorMsg);
+    if (typeof msg === 'string')
+      setTimeout(() => session.bot.deleteMessage(session.channelId, msg).catch(() => { }), 10000);
+    return null;
   },
 
   /**

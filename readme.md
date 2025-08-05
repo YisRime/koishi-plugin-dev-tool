@@ -64,6 +64,60 @@
 | `info.memberlist` | 获取群成员列表 | `info.memberlist 123456 1` |
 | `info.grouphonor` | 查询群荣誉信息 | `info.grouphonor 123456 -t talkative` |
 
+### Protobuf 操作 (pb)
+
+#### 发送 PB 元素
+
+```text
+packet pb <elements>
+```
+
+发送 protobuf 元素数据，需要提供 JSON 数组格式的数据。
+
+#### 发送原始 PB 数据
+
+```text
+packet pb.raw <cmd> <content>
+```
+
+- `cmd`: protobuf 命令名称
+- `content`: JSON 格式的数据内容
+
+#### 获取 PB 数据
+
+```text
+packet pb.get [messageId] [-s]
+```
+
+- `messageId`: 消息 ID（可选，不提供时使用引用消息）
+- `-s, --seq`: 使用序列号而非消息 ID
+
+### 长消息 (long)
+
+#### 发送长消息
+
+```text
+packet long <content>
+```
+
+发送长消息内容，需要提供 JSON 格式的数据。
+
+#### 生成长消息 ResID
+
+```text
+packet long.id <content>
+```
+
+生成长消息的资源 ID，返回可用于构建长消息元素的 protobuf 数据。
+
+#### 获取长消息内容
+
+```text
+packet long.get <resid>
+```
+
+通过 ResID 获取长消息的完整 protobuf 数据。
+
 ## 命令参数说明
 
 ### inspect elements/content
@@ -112,6 +166,24 @@
 | `keepBackups` | number | 7 | 保留备份数量（0为不限制） |
 | `dir` | string | './data/backups' | 备份存储目录 |
 | `tables` | string[] | [] | 特殊表名（如大写表名） |
+
+## 技术细节
+
+### Protobuf 编码
+
+插件内置了完整的 Protobuf 编码解码器，支持：
+
+- 可变长度整数编码 (varint)
+- 长度分隔字段编码
+- 嵌套对象编码
+- 字节数据和字符串编码
+
+### 数据处理
+
+- 自动处理十六进制字符串转换
+- 支持 `hex->` 前缀的十六进制数据
+- BigInt 数据自动转换为安全整数或字符串
+- Buffer 数据自动转换为十六进制表示
 
 ## 自动备份
 
