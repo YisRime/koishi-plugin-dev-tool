@@ -2,7 +2,6 @@ import { Context } from 'koishi'
 import { Config, logger } from './index'
 import { formatTimestamp, getTimestamp, parseJSONWithDates } from './utils'
 import fs from 'fs/promises'
-import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
 
 /**
@@ -43,9 +42,13 @@ export class BackupService {
    * 确保备份目录存在
    * @private
    */
-  private ensureBackupDir(): void {
-    if (!existsSync(this.config.dir)) {
-      mkdirSync(this.config.dir, { recursive: true })
+  private async ensureBackupDir(): Promise<void> {
+    try {
+      await fs.mkdir(this.config.dir, { recursive: true })
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        throw error;
+      }
     }
   }
 
@@ -63,7 +66,7 @@ export class BackupService {
       logger.info('执行定时备份...')
 
       try {
-        this.ensureBackupDir()
+        await this.ensureBackupDir()
         const timestamp = getTimestamp()
         const tables = await this.getTablesForBackup()
 
@@ -309,7 +312,7 @@ export class BackupService {
       .option('tables', '-t <tables:string> 指定表（逗号分隔）')
       .action(async ({ options }) => {
         try {
-          this.ensureBackupDir()
+          await this.ensureBackupDir()
           const timestamp = getTimestamp()
           const specificTables = options.tables ? options.tables.split(',').filter(Boolean) : undefined
           const tables = await this.getTablesForBackup(specificTables)
@@ -335,7 +338,7 @@ export class BackupService {
       .option('tables', '-t <tables:string> 指定表（逗号分隔）')
       .action(async ({ options }, index) => {
         try {
-          this.ensureBackupDir()
+          await this.ensureBackupDir()
           const backups = await this.listBackups()
           const tableNames = options.tables ? options.tables.split(',').filter(Boolean) : undefined
 
@@ -377,21 +380,33 @@ export class BackupService {
    * @private
    */
   private async cleanupOldBackups(keepCount: number): Promise<void> {
-    if (!keepCount) return
+    if (keepCount <= 0) return
     try {
-      const files = await fs.readdir(this.config.dir)
-      const pattern = this.config.singleFile ? 'backup_' : 'backup_'
+      const backups = await this.listBackups()
+      if (backups.length <= keepCount) {
+        return
+      }
 
-      const backupFiles = files
-        .filter(file => file.startsWith(pattern))
-        .sort((a, b) => b.localeCompare(a))
+      const backupsToDelete = backups.slice(keepCount)
+      if (backupsToDelete.length === 0) {
+        return
+      }
 
-      if (backupFiles.length > keepCount) {
-        for (let i = keepCount; i < backupFiles.length; i++) {
-          await fs.unlink(path.join(this.config.dir, backupFiles[i]))
-          logger.info(`已删除旧备份: ${backupFiles[i]}`)
+      const timestampsToDelete = new Set(backupsToDelete.map(b => b.timestamp))
+      const allFiles = await fs.readdir(this.config.dir)
+      const deletePromises: Promise<void>[] = []
+
+      for (const file of allFiles) {
+        const match = file.match(/^backup_(\d+)/)
+        if (match && timestampsToDelete.has(match[1])) {
+          const filePath = path.join(this.config.dir, file)
+          deletePromises.push(fs.unlink(filePath).then(() => {
+            logger.info(`已删除旧备份: ${file}`)
+          }))
         }
       }
+
+      await Promise.all(deletePromises)
     } catch (e) {
       logger.error(`清理旧备份失败: ${e.message}`)
     }
@@ -403,7 +418,7 @@ export class BackupService {
    * @private
    */
   private async listBackups(): Promise<{timestamp: string, tables?: string[]}[]> {
-    this.ensureBackupDir()
+    await this.ensureBackupDir()
     const files = await fs.readdir(this.config.dir)
 
     if (this.config.singleFile) {

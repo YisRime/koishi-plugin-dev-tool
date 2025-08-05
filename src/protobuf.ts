@@ -53,6 +53,10 @@ export class ProtobufEncoder {
         value = varintResult.value
         nextOffset = varintResult.nextOffset
         break
+      case 1:
+        value = data.slice(keyOffset, keyOffset + 8);
+        nextOffset = keyOffset + 8;
+        break;
       case 2:
         const lengthResult = this._readVarint(data, keyOffset)
         const length = lengthResult.value
@@ -71,6 +75,10 @@ export class ProtobufEncoder {
         }
         nextOffset = dataEnd
         break
+      case 5:
+        value = data.slice(keyOffset, keyOffset + 4);
+        nextOffset = keyOffset + 4;
+        break;
       default:
         throw new Error(`Unsupported wire type: ${wireType}`)
     }

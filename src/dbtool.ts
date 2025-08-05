@@ -258,7 +258,7 @@ export class DbService {
         try {
           const validTable = await this.validateTable(table);
           if (!validTable) {
-            return `删除失败: 表 "${table}" 不存在`;
+            return `表 "${table}" 不存在，无需删除`;
           }
 
           const result = await this.ctx.database.get(validTable as any, {});

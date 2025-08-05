@@ -2,6 +2,7 @@ import { Session, Command } from 'koishi'
 import { ProtobufEncoder } from './protobuf'
 import { promisify } from 'util'
 import { gzip as _gzip, gunzip as _gunzip } from 'zlib'
+import { logger } from './index'
 
 const gzip = promisify(_gzip)
 const gunzip = promisify(_gunzip)
@@ -107,7 +108,12 @@ export class Sender {
     const encodedData = this.encoder.encode(packet)
     const hexString = Buffer.from(encodedData).toString('hex')
     const resp = await session.onebot._request('send_packet', { cmd, data: hexString })
-    return resp?.data ? this.encoder.decode(resp.data) : null
+    try {
+      return resp?.data ? this.encoder.decode(resp.data) : null
+    } catch (e) {
+      logger.warn(`Failed to decode getMessage response for seq ${seq}: ${e.message}`)
+      return null
+    }
   }
 
   /**
@@ -187,13 +193,17 @@ export class Sender {
       "15": { "1": 2, "2": 0, "3": 0, "4": 0 }
     }
     const resp = await this.sendPacket(session, 'trpc.group.long_msg_interface.MsgService.SsoRecvLongMsg', packet)
-    if (resp?.data) {
-      const decodedResp = this.encoder.decode(resp.data)
-      const compressedData = decodedResp?.["1"]?.["4"]
-      if (compressedData) {
-        const decompressedData = await gunzip(compressedData)
-        return this.encoder.decode(decompressedData)
+    try {
+      if (resp?.data) {
+        const decodedResp = this.encoder.decode(resp.data)
+        const compressedData = decodedResp?.["1"]?.["4"]
+        if (compressedData) {
+          const decompressedData = await gunzip(compressedData)
+          return this.encoder.decode(decompressedData)
+        }
       }
+    } catch (e) {
+        logger.warn(`Failed to decode receiveLong response for resid ${resid}: ${e.message}`)
     }
     return null
   }
@@ -209,7 +219,12 @@ export class Sender {
     const encodedData = this.encoder.encode(typeof content === 'object' ? this.processJson(content) : this.processJson(JSON.parse(content)))
     const hexString = Buffer.from(encodedData).toString('hex')
     const resp = await session.onebot._request('send_packet', { cmd, data: hexString })
-    return resp?.data ? this.encoder.decode(resp.data) : null
+    try {
+      return resp?.data ? this.encoder.decode(resp.data) : null
+    } catch (e) {
+      logger.warn(`Failed to decode sendRawPacket response for cmd ${cmd}: ${e.message}`)
+      return null;
+    }
   }
 
   /**
