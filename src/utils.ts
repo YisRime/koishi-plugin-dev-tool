@@ -25,6 +25,18 @@ export const utils = {
   },
 
   /**
+   * 处理错误并发送提示消息
+   */
+  handleError(session: Session, error: any) {
+    const errorMsg = error?.message || String(error);
+    return session.send(errorMsg).then(msg => {
+      if (typeof msg === 'string')
+        setTimeout(() => session.bot.deleteMessage(session.channelId, msg).catch(() => {}), 10000);
+      return null;
+    });
+  },
+
+  /**
    * 自动撤回消息
    * @param session - 会话对象
    * @param message - 要撤回的消息ID

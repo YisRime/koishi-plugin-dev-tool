@@ -1,7 +1,11 @@
 import { Context, Schema, h, Logger } from 'koishi'
+import {} from 'koishi-plugin-adapter-onebot'
 import { BackupService } from './backup'
 import { DbService } from './dbtool'
 import { formatInspect } from './utils'
+import { Onebot } from './onebot'
+import { Sender } from './sender'
+import { ProtobufEncoder } from './protobuf'
 
 export const name = 'dev-tool'
 export const inject = ['database']
@@ -31,12 +35,14 @@ export interface Config {
   dir: string
   keepBackups: number
   singleFile: boolean
+  enableOnebot: boolean
 }
 
 /**
  * 插件配置Schema定义
  */
 export const Config: Schema<Config> = Schema.object({
+  enableOnebot: Schema.boolean().description('注册 OneBot 工具').default(true),
   autoBackup: Schema.boolean().description('启用自动备份').default(false),
   singleFile: Schema.boolean().description('以单文件存储备份').default(false),
   interval: Schema.number().description('自动备份间隔（小时）').default(24).min(1),
@@ -148,4 +154,13 @@ export function apply(ctx: Context, config: Config) {
     .action(async ({ session }) => {
       return h.text(formatInspect(session, { depth: Infinity }));
     })
+
+  // 根据配置决定是否注册 OneBot 相关命令
+  if (config.enableOnebot) {
+    const onebot = ctx.command('onebot', 'Onebot 工具')
+    new Onebot().registerCommands(onebot)
+    const encoder = new ProtobufEncoder()
+    const Send = new Sender(encoder)
+    Send.registerPacketCommands(onebot)
+  }
 }
