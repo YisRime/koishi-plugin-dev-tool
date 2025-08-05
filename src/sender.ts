@@ -1,4 +1,4 @@
-import { Session, Command } from 'koishi'
+import { Session, Command, h } from 'koishi'
 import { ProtobufEncoder } from './protobuf'
 import { promisify } from 'util'
 import { gzip as _gzip, gunzip as _gunzip } from 'zlib'
@@ -236,7 +236,7 @@ export class Sender {
     const pb = onebot.subcommand('pb <elements:text>', '发送 PB 元素')
       .usage('发送 pb(elem) 数据')
       .action(async ({ session }, elements) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
+        if (session.bot.platform !== 'onebot') return;
         if (!elements?.trim()) return '请提供数据'
         const result = JSON.parse(elements)
         if (!Array.isArray(result)) return '非数组数据'
@@ -246,7 +246,7 @@ export class Sender {
     pb.subcommand('.raw <cmd:text> <content:text>', '发送 PB 数据')
       .usage('发送 pb 数据')
       .action(async ({ session }, cmd, content) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
+        if (session.bot.platform !== 'onebot') return;
         if (!cmd?.trim() || !content?.trim()) return '请提供数据'
         const result = JSON.parse(content)
         const response = await this.sendRawPacket(session, cmd.trim(), result)
@@ -257,7 +257,7 @@ export class Sender {
       .option('seq', '-s 使用 seq 而非 messageId')
       .usage('获取消息的 protobuf 数据\n不提供 messageId 时自动使用引用消息')
       .action(async ({ session, options }, messageId) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
+        if (session.bot.platform !== 'onebot') return;
         const replyData = session.event._data?.message?.find(msg => msg.type === 'reply')
         if (replyData?.data?.id) {
           const quotedMsgInfo = await session.onebot._request('get_msg', { message_id: replyData.data.id })
@@ -276,7 +276,7 @@ export class Sender {
     const long = onebot.subcommand('long <content:text>', '发送长消息')
       .usage('输入 [JSON] 发送长消息内容')
       .action(async ({ session }, content) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
+        if (session.bot.platform !== 'onebot') return;
         if (!content?.trim()) return '请提供数据'
         const result = JSON.parse(content)
         await this.sendLongElement(session, result)
@@ -285,7 +285,7 @@ export class Sender {
     long.subcommand('.id <content:text>', '生成长消息 ResID')
       .usage('输入 [JSON] 生成长消息 ResID')
       .action(async ({ session }, content) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
+        if (session.bot.platform !== 'onebot') return;
         if (!content?.trim()) return '请提供数据'
         const result = JSON.parse(content)
         const resid = await this.sendLong(session, result)
@@ -304,45 +304,102 @@ export class Sender {
     long.subcommand('.get <resid:text>', '获取长消息 PB')
       .usage('通过 ResID 获取长消息 PB 数据')
       .action(async ({ session }, resid) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
+        if (session.bot.platform !== 'onebot') return;
         if (!resid?.trim()) return '请提供 ID'
         const data = await this.receiveLong(session, resid.trim())
         if (!data) return '获取长消息失败'
         return JSON.stringify(data, jsonReplacer, 2)
       })
 
-    onebot.subcommand('forward <nodes:text>', '发送合并转发')
-      .usage('使用 `|` 分隔节点，节点格式为 `QQ号-昵称-消息内容`。')
-      .action(async ({ session }, nodes) => {
-        if (session.bot.platform !== 'onebot') return '此命令仅支持 OneBot 平台。';
-        if (!nodes?.trim()) return '请提供节点内容';
+    onebot.subcommand('forward <nodes:text>', '发送合并转发消息')
+      .usage(
+        '使用 `||` 分隔节点，通过`:`区分用户和内容。\n' +
+        '格式: 使用 `QQ/@ 昵称` 指定用户信息，若省略则使用自己的信息\n' +
+        '示例:forward 12 A:一||@34-B:二||三'
+      )
+      .action(async ({ session }, nodesText) => {
+        if (session.bot.platform !== 'onebot') return;
+        if (!nodesText?.trim()) return '请提供节点内容';
 
         try {
-          const messageNodes = nodes.split('|')
-            .map(nodeStr => {
-              const [userId, nickname, ...contentParts] = nodeStr.trim().split('-');
-              const content = contentParts.join('-');
+          // 使用 `||` 分割成独立的节点
+          const nodeStrings = nodesText.split('||');
+          const messageElements = [];
 
-              if (!userId || !nickname || !content || !/^\d+$/.test(userId)) {
-                return null;
+          for (const nodeStr of nodeStrings) {
+            if (!nodeStr.trim()) continue;
+
+            let userId = session.author.userId;
+            let nickname = session.author.name; // 默认使用发送者昵称
+            let content = nodeStr.trim();
+
+            const colonIndex = nodeStr.indexOf(':');
+
+            if (colonIndex !== -1) {
+              const metaStr = nodeStr.substring(0, colonIndex).trim();
+              content = nodeStr.substring(colonIndex + 1).trim();
+
+              if (metaStr) {
+                // 将元数据字符串解析成消息元素数组
+                const metaElements = h.parse(metaStr);
+                const atElement = metaElements.find(el => el.type === 'at');
+
+                if (atElement) {
+                  // 优先处理 @ 元素
+                  userId = atElement.attrs.id;
+
+                  // 将其他文本元素拼接起来作为昵称
+                  const nickPart = metaElements
+                    .filter(el => el.type === 'text')
+                    .map(el => el.attrs.content)
+                    .join('')
+                    .trim();
+
+                  // 如果有提供昵称部分，则使用；否则不指定昵称，让客户端显示默认
+                  nickname = nickPart || null;
+
+                } else {
+                  // 如果没有 @ 元素，则退回纯文本处理逻辑
+                  const spaceIndex = metaStr.indexOf(' ');
+                  // 检查是否存在空格，并且空格前是QQ号
+                  if (spaceIndex !== -1) {
+                      const part1 = metaStr.substring(0, spaceIndex).trim();
+                      const part2 = metaStr.substring(spaceIndex + 1).trim();
+                      if (/^\d{5,}$/.test(part1) && part2) { // QQ号 昵称
+                          userId = part1;
+                          nickname = part2;
+                      } else { // 没有有效的QQ号，整个都作为昵称
+                          userId = session.author.userId;
+                          nickname = metaStr;
+                      }
+                  } else {
+                      // 没有空格，则判断是纯QQ号还是纯昵称
+                      if (/^\d{5,}$/.test(metaStr)) { // 纯QQ号
+                          userId = metaStr;
+                          nickname = null; // 不指定昵称，让客户端显示默认
+                      } else { // 纯昵称
+                          userId = session.author.userId;
+                          nickname = metaStr;
+                      }
+                  }
+                }
               }
+            }
 
-              return {
-                type: 'node',
-                data: { user_id: userId, nickname, content },
-              };
-            })
-            .filter(Boolean);
+            if (!content) continue;
 
-          if (messageNodes.length === 0) {
+            const authorElement = h('author', { id: userId, name: nickname });
+            const contentElements = h.parse(content);
+            messageElements.push(h('message', {}, [authorElement, ...contentElements]));
+          }
+
+          if (messageElements.length === 0) {
             return '消息节点无效';
           }
 
-          if (session.guildId) {
-            await session.onebot.sendGroupForwardMsg(session.guildId, messageNodes);
-          } else {
-            await session.onebot.sendPrivateForwardMsg(session.userId, messageNodes);
-          }
+          const forwardMessage = h('message', { forward: true }, messageElements);
+          await session.send(forwardMessage);
+
         } catch (error) {
           return `发送失败：${error.message}`;
         }
