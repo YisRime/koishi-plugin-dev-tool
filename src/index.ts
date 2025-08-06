@@ -29,27 +29,45 @@ export const usage = `
  * 插件配置接口
  */
 export interface Config {
+  enableOnebot: boolean
   tables: string[]
   autoBackup: boolean
   interval: number
   dir: string
   keepBackups: number
   singleFile: boolean
-  enableOnebot: boolean
+  logAllEvents: boolean
+  logFilterMode: 'whitelist' | 'blacklist'
+  logFilters: {
+    type: 'user' | 'guild' | 'event'
+    content: string
+  }[]
 }
 
 /**
  * 插件配置Schema定义
  */
-export const Config: Schema<Config> = Schema.object({
-  enableOnebot: Schema.boolean().description('注册 OneBot 工具').default(true),
-  autoBackup: Schema.boolean().description('启用自动备份').default(false),
-  singleFile: Schema.boolean().description('以单文件存储备份').default(false),
-  interval: Schema.number().description('自动备份间隔（小时）').default(24).min(1),
-  keepBackups: Schema.number().description('保留备份数量').default(7).min(0),
-  dir: Schema.string().description('备份存储目录').default('./data/backups'),
-  tables: Schema.array(String).description('特殊表名（如大写表名）').default([]),
-})
+export const Config: Schema<Config> = Schema.intersect([
+  Schema.object({
+    enableOnebot: Schema.boolean().description('注册 OneBot 相关工具').default(true),
+  }).description('开关配置'),
+  Schema.object({
+    autoBackup: Schema.boolean().description('启用数据库定时备份').default(false),
+    singleFile: Schema.boolean().description('将所有表备份到单个文件').default(false),
+    interval: Schema.number().description('自动备份间隔（小时）').default(24).min(1),
+    keepBackups: Schema.number().description('保留的备份文件数量（0为不限制）').default(7).min(0),
+    dir: Schema.string().description('备份文件存储目录').default('./data/backups'),
+    tables: Schema.array(String).description('需要处理的特殊表名（例如包含大写字母的表）'),
+  }).description('备份配置'),
+  Schema.object({
+    logAllEvents: Schema.boolean().description('启用事件捕持').default(false),
+    logFilterMode: Schema.union(['whitelist', 'blacklist']).description('过滤模式').default('whitelist'),
+    logFilters: Schema.array(Schema.object({
+      type: Schema.union(['user', 'guild', 'event' ]).description('过滤类型').role('select'),
+      content: Schema.string().description('过滤内容')
+    })).role('table').description('过滤列表'),
+  }).description('事件配置'),
+])
 
 /**
  * 插件主函数
@@ -162,5 +180,32 @@ export function apply(ctx: Context, config: Config) {
     const encoder = new ProtobufEncoder()
     const Send = new Sender(encoder)
     Send.registerPacketCommands(onebot)
+  }
+
+  // 注册事件日志记录器
+  if (config.logAllEvents) {
+    ctx.on('internal/session', (session) => {
+      if (!session.type) return;
+      if (!config.logFilters?.length) {
+        // 如果是黑名单模式且列表为空，则记录所有事件
+        if (config.logFilterMode === 'blacklist') {
+          logger.info(formatInspect(session));
+        }
+        return;
+      }
+
+      const isMatch = config.logFilters.some(rule => {
+        if (rule.type === 'user' && session.userId === rule.content) return true;
+        if (rule.type === 'guild' && session.guildId === rule.content) return true;
+        if (rule.type === 'event' && session.type === rule.content) return true;
+        return false;
+      });
+
+      const shouldLog = config.logFilterMode === 'whitelist' ? isMatch : !isMatch;
+
+      if (shouldLog) {
+        logger.info(formatInspect(session));
+      }
+    });
   }
 }
