@@ -314,92 +314,79 @@ export class Sender {
     onebot.subcommand('forward <nodes:text>', '发送合并转发消息')
       .usage(
         '使用 `||` 分隔节点，通过`:`区分用户和内容。\n' +
-        '格式: 使用 `QQ/@ 昵称` 指定用户信息，若省略则使用自己的信息\n' +
-        '示例:forward 12 A:一||@34-B:二||三'
+        '格式: 使用 `QQ/@昵称` 指定用户信息，若省略则使用自己的信息。\n' +
+        '节点内回复: 在内容前添加 `[reply=消息ID]` 来引用一条消息。\n' +
+        '示例: forward 123:一||@张三:[reply=456]二||[reply=789]三'
       )
       .action(async ({ session }, nodesText) => {
         if (session.bot.platform !== 'onebot') return;
         if (!nodesText?.trim()) return '请提供节点内容';
 
         try {
-          // 使用 `||` 分割成独立的节点
           const nodeStrings = nodesText.split('||');
           const messageElements = [];
-
           for (const nodeStr of nodeStrings) {
             if (!nodeStr.trim()) continue;
-
             let userId = session.author.userId;
-            let nickname = session.author.name; // 默认使用发送者昵称
+            let nickname = session.author.name;
             let content = nodeStr.trim();
-
+            let replyId = null;
             const colonIndex = nodeStr.indexOf(':');
-
             if (colonIndex !== -1) {
               const metaStr = nodeStr.substring(0, colonIndex).trim();
               content = nodeStr.substring(colonIndex + 1).trim();
-
               if (metaStr) {
-                // 将元数据字符串解析成消息元素数组
                 const metaElements = h.parse(metaStr);
                 const atElement = metaElements.find(el => el.type === 'at');
-
                 if (atElement) {
-                  // 优先处理 @ 元素
                   userId = atElement.attrs.id;
-
-                  // 将其他文本元素拼接起来作为昵称
                   const nickPart = metaElements
                     .filter(el => el.type === 'text')
                     .map(el => el.attrs.content)
                     .join('')
                     .trim();
-
-                  // 如果有提供昵称部分，则使用；否则不指定昵称，让客户端显示默认
                   nickname = nickPart || null;
-
                 } else {
-                  // 如果没有 @ 元素，则退回纯文本处理逻辑
                   const spaceIndex = metaStr.indexOf(' ');
-                  // 检查是否存在空格，并且空格前是QQ号
                   if (spaceIndex !== -1) {
-                      const part1 = metaStr.substring(0, spaceIndex).trim();
-                      const part2 = metaStr.substring(spaceIndex + 1).trim();
-                      if (/^\d{5,}$/.test(part1) && part2) { // QQ号 昵称
-                          userId = part1;
-                          nickname = part2;
-                      } else { // 没有有效的QQ号，整个都作为昵称
-                          userId = session.author.userId;
-                          nickname = metaStr;
-                      }
+                    const part1 = metaStr.substring(0, spaceIndex).trim();
+                    const part2 = metaStr.substring(spaceIndex + 1).trim();
+                    if (/^\d{5,}$/.test(part1) && part2) {
+                      userId = part1;
+                      nickname = part2;
+                    } else {
+                      userId = session.author.userId;
+                      nickname = metaStr;
+                    }
                   } else {
-                      // 没有空格，则判断是纯QQ号还是纯昵称
-                      if (/^\d{5,}$/.test(metaStr)) { // 纯QQ号
-                          userId = metaStr;
-                          nickname = null; // 不指定昵称，让客户端显示默认
-                      } else { // 纯昵称
-                          userId = session.author.userId;
-                          nickname = metaStr;
-                      }
+                    if (/^\d{5,}$/.test(metaStr)) {
+                      userId = metaStr;
+                      nickname = null;
+                    } else {
+                      userId = session.author.userId;
+                      nickname = metaStr;
+                    }
                   }
                 }
               }
             }
-
-            if (!content) continue;
-
+            const replyMatch = content.match(/^\[reply=([\w-]+)\]/);
+            if (replyMatch) {
+              replyId = replyMatch[1];
+              content = content.substring(replyMatch[0].length).trim();
+            }
+            if (!content && !replyId) continue;
             const authorElement = h('author', { id: userId, name: nickname });
-            const contentElements = h.parse(content);
-            messageElements.push(h('message', {}, [authorElement, ...contentElements]));
+            const nodeContentElements = [];
+            if (replyId) nodeContentElements.push(h('reply', { id: replyId }, 'hello'));
+            if (content) nodeContentElements.push(...h.parse(content));
+            if (nodeContentElements.length > 0) messageElements.push(h('message', {}, [authorElement, ...nodeContentElements]));
           }
-
           if (messageElements.length === 0) {
             return '消息节点无效';
           }
-
           const forwardMessage = h('message', { forward: true }, messageElements);
           await session.send(forwardMessage);
-
         } catch (error) {
           return `发送失败：${error.message}`;
         }
