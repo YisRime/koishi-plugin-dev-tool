@@ -1,4 +1,4 @@
-import { Context } from 'koishi';
+import { $, Context } from 'koishi';
 import { logger } from './index';
 import { formatAsTable, formatInspect } from './utils';
 
@@ -27,31 +27,10 @@ export class DbService {
     try {
       const stats = await this.ctx.database.stats();
       const existingTables = Object.keys(stats.tables || {});
-      return existingTables.includes(table) ? table :
-             existingTables.find(t => t.toLowerCase() === table.toLowerCase()) || null;
+      return existingTables.find(t => t.toLowerCase() === table.toLowerCase()) || (existingTables.includes(table) ? table : null);
     } catch (e) {
       logger.warn(`验证表名失败: ${e.message}`);
       return null;
-    }
-  }
-
-  /**
-   * 获取表记录并计数
-   * @param table - 表名
-   * @param filter - 过滤条件
-   * @returns 查询结果对象
-   */
-  private async getTableData(table: string, filter: any = {}) {
-    try {
-      const validTable = await this.validateTable(table);
-      if (!validTable) {
-        return { success: false, error: `表 "${table}" 不存在或无法访问` };
-      }
-
-      const rows = await this.ctx.database.get(validTable as any, filter);
-      return { success: true, rows, count: rows.length, table: validTable };
-    } catch (e) {
-      return { success: false, error: e.message, count: 0, rows: [] };
     }
   }
 
@@ -62,6 +41,7 @@ export class DbService {
   initialize(): void {
     this.Command = this.ctx.command('db', '数据库工具', { authority: 4 })
       .usage('查询和管理数据库')
+
     // 数据库概览命令
     this.Command.subcommand('.list [page]', '列出数据库表')
       .usage('列出数据库所有表\n- db.list [页码] - 显示数据库概览\n- db.list all - 显示所有表')
@@ -100,6 +80,7 @@ export class DbService {
           return `获取数据库概览失败: ${e.message}`;
         }
       });
+
     // 查询命令
     this.Command.subcommand('.query <table>', '查询表数据')
       .option('filter', '-f <filter:string> 过滤条件(JSON)')
@@ -108,32 +89,40 @@ export class DbService {
       .action(async ({ options }, table) => {
         try {
           const filter = JSON.parse(options.filter || '{}');
-          const page = Math.max(1, Math.min(10, options.page || 1));
-          const pageSize = 5;
+          const page = Math.max(1, options.page || 1);
+          const pageSize = 10;
 
-          const result = await this.getTableData(table, filter);
-
-          if (!result.success) {
-            return `查询失败: ${result.error}`;
+          const validTable = await this.validateTable(table);
+          if (!validTable) {
+            return `查询失败: 表 "${table}" 不存在或无法访问`;
           }
 
-          if (!result.rows?.length) {
-            return `表 ${result.table} 中没有匹配数据`;
+          const totalCount = await this.ctx.database.eval(
+              validTable as any,
+              (row) => $.count(row.id),
+              filter
+          );
+
+          if (totalCount === 0) {
+            return `表 ${validTable} 中没有匹配数据`;
           }
 
-          const totalPages = Math.ceil(result.count / pageSize);
-          const start = (page - 1) * pageSize;
-          const currentPageData = result.rows.slice(start, start + pageSize);
+          const currentPageData = await this.ctx.database.get(validTable as any, filter, {
+              limit: pageSize,
+              offset: (page - 1) * pageSize,
+          });
 
+          const totalPages = Math.ceil(totalCount / pageSize);
           const filterDesc = Object.keys(filter).length > 0 ?
             `\n过滤条件: ${JSON.stringify(filter)}` : '';
 
-          return `表 ${result.table} (${result.count}条) - 第${page}/${totalPages || 1}页${filterDesc}\n` +
+          return `表 ${validTable} (${totalCount}条) - 第${page}/${totalPages || 1}页${filterDesc}\n` +
                  formatAsTable(currentPageData);
         } catch (e) {
           return `查询失败: ${e.message}`;
         }
       });
+
     // 统计记录命令
     this.Command.subcommand('.count <table>', '统计表记录数')
       .option('filter', '-f <filter:string> 过滤条件(JSON)')
@@ -141,20 +130,27 @@ export class DbService {
       .action(async ({ options }, table) => {
         try {
           const filter = JSON.parse(options.filter || '{}');
-          const result = await this.getTableData(table, filter);
 
-          if (!result.success) {
-            return `统计失败: ${result.error}`;
+          const validTable = await this.validateTable(table);
+          if (!validTable) {
+              return `统计失败: 表 "${table}" 不存在或无法访问`;
           }
+
+          const count = await this.ctx.database.eval(
+              validTable as any,
+              (row) => $.count(row.id),
+              filter
+          );
 
           const filterDesc = Object.keys(filter).length > 0 ?
             `（条件: ${JSON.stringify(filter)}）` : '';
 
-          return `表 ${result.table} 共有 ${result.count} 条数据${filterDesc}`;
+          return `表 ${validTable} 共有 ${count} 条数据${filterDesc}`;
         } catch (e) {
           return `统计失败: ${e.message}`;
         }
       });
+
     // 更新数据命令
     this.Command.subcommand('.update <table>', '更新表数据')
       .option('mode', '-m <mode:string> 模式(set/create/upsert)', { fallback: 'set' })
@@ -168,9 +164,7 @@ export class DbService {
           const data = JSON.parse(options.data || '{}');
 
           const validTable = await this.validateTable(table);
-          if (!validTable) {
-            return `更新失败: 表 "${table}" 不存在`;
-          }
+          if (!validTable) return `更新失败: 表 "${table}" 不存在`;
 
           let result, message;
 
@@ -178,14 +172,9 @@ export class DbService {
             case 'set':
               const query = JSON.parse(options.query || '{}');
               const before = await this.ctx.database.get(validTable as any, query);
-
-              if (!before.length) {
-                return `更新失败: 表 ${validTable} 中没有匹配数据`;
-              }
-
+              if (!before.length) return `更新失败: 表 ${validTable} 中没有匹配数据`;
               result = await this.ctx.database.set(validTable as any, query, data);
               const after = await this.ctx.database.get(validTable as any, query);
-
               message = `已更新 ${result.modified} 条数据\n更新前:\n${formatInspect(before[0], { depth: 2 })}\n更新后:\n${formatInspect(after[0], { depth: 2 })}`;
               break;
             case 'create':
@@ -193,10 +182,7 @@ export class DbService {
               message = `已插入 1 条数据\n${formatInspect(result, { depth: 2 })}`;
               break;
             case 'upsert':
-              if (!Array.isArray(data)) {
-                return '更新失败: 数据必须是数组格式';
-              }
-
+              if (!Array.isArray(data)) return '更新失败: 数据必须是数组格式';
               const keys = options.keys?.split(',').filter(Boolean) || [];
               result = await this.ctx.database.upsert(validTable as any, data, keys);
               message = `已处理 ${data.length} 条数据\n- 新增: ${result.inserted}条\n- 匹配: ${result.matched}条\n- 修改: ${result.modified}条`;
@@ -209,6 +195,7 @@ export class DbService {
           return `更新失败: ${e.message}`;
         }
       });
+
     // 删除数据命令
     this.Command.subcommand('.delete <table>', '删除表数据')
       .option('filter', '-f <filter:string> 过滤条件(JSON)')
@@ -216,26 +203,31 @@ export class DbService {
       .action(async ({ options }, table) => {
         try {
           const filter = JSON.parse(options.filter || '{}');
-          const result = await this.getTableData(table, filter);
 
-          if (!result.success) {
-            return `删除失败: ${result.error}`;
+          const validTable = await this.validateTable(table);
+          if (!validTable) return `删除失败: 表 "${table}" 不存在或无法访问`;
+
+          const count = await this.ctx.database.eval(
+              validTable as any,
+              (row) => $.count(row.id),
+              filter
+          );
+
+          if (count === 0) {
+            return `表 ${validTable} 中没有匹配数据`;
           }
 
-          if (!result.rows?.length) {
-            return `表 ${result.table} 中没有匹配数据`;
-          }
-
-          await this.ctx.database.remove(result.table as any, filter);
+          await this.ctx.database.remove(validTable as any, filter);
 
           const isEmpty = Object.keys(filter).length === 0;
           return isEmpty
-            ? `已清空表 ${result.table} (${result.count}条)`
-            : `已删除表 ${result.table} 中符合条件的 ${result.count} 条数据`;
+            ? `已清空表 ${validTable} (${count}条)`
+            : `已删除表 ${validTable} 中符合条件的 ${count} 条数据`;
         } catch (e) {
           return `删除失败: ${e.message}`;
         }
       });
+
     // 删除表命令
     this.Command.subcommand('.drop [table]', '删除表', { authority: 5 })
       .option('all', '-a 删除所有表')
@@ -247,7 +239,6 @@ export class DbService {
             const tables = stats.tables || {};
             const tableCount = Object.keys(tables).length;
             const recordCount = Object.values(tables).reduce((sum, table: any) => sum + table.count, 0);
-
             await this.ctx.database.dropAll();
             return `已删除所有表 (${tableCount}表/${recordCount}条)`;
           } catch (e) {
@@ -257,12 +248,9 @@ export class DbService {
 
         try {
           const validTable = await this.validateTable(table);
-          if (!validTable) {
-            return `表 "${table}" 不存在，无需删除`;
-          }
+          if (!validTable) return `表 "${table}" 不存在，无需删除`;
 
-          const result = await this.ctx.database.get(validTable as any, {});
-          const count = result.length;
+          const count = await this.ctx.database.eval(validTable as any, (row) => $.count(row.id));
 
           await this.ctx.database.drop(validTable as any);
           return `已删除表 ${validTable} (${count}条)`;
