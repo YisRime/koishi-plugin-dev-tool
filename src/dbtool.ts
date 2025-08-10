@@ -97,9 +97,12 @@ export class DbService {
             return `查询失败: 表 "${table}" 不存在或无法访问`;
           }
 
+          const model = this.ctx.model.tables[validTable];
+          const keyToCount = Array.isArray(model.primary) ? model.primary[0] : model.primary || Object.keys(model.fields)[0];
+
           const totalCount = await this.ctx.database.eval(
               validTable as any,
-              (row) => $.count(row.id),
+              (row) => $.count(row[keyToCount]),
               filter
           );
 
@@ -136,9 +139,12 @@ export class DbService {
               return `统计失败: 表 "${table}" 不存在或无法访问`;
           }
 
+          const model = this.ctx.model.tables[validTable];
+          const keyToCount = Array.isArray(model.primary) ? model.primary[0] : model.primary || Object.keys(model.fields)[0];
+
           const count = await this.ctx.database.eval(
               validTable as any,
-              (row) => $.count(row.id),
+              (row) => $.count(row[keyToCount]),
               filter
           );
 
@@ -207,9 +213,12 @@ export class DbService {
           const validTable = await this.validateTable(table);
           if (!validTable) return `删除失败: 表 "${table}" 不存在或无法访问`;
 
+          const model = this.ctx.model.tables[validTable];
+          const keyToCount = Array.isArray(model.primary) ? model.primary[0] : model.primary || Object.keys(model.fields)[0];
+
           const count = await this.ctx.database.eval(
               validTable as any,
-              (row) => $.count(row.id),
+              (row) => $.count(row[keyToCount]),
               filter
           );
 
@@ -250,7 +259,10 @@ export class DbService {
           const validTable = await this.validateTable(table);
           if (!validTable) return `表 "${table}" 不存在，无需删除`;
 
-          const count = await this.ctx.database.eval(validTable as any, (row) => $.count(row.id));
+          const model = this.ctx.model.tables[validTable];
+          const keyToCount = Array.isArray(model.primary) ? model.primary[0] : model.primary || Object.keys(model.fields)[0];
+
+          const count = await this.ctx.database.eval(validTable as any, (row) => $.count(row[keyToCount]));
 
           await this.ctx.database.drop(validTable as any);
           return `已删除表 ${validTable} (${count}条)`;
