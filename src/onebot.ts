@@ -191,7 +191,7 @@ export class Onebot {
    * @param onebot onebot命令对象
    */
   registerCommands(onebot: Command): void {
-    onebot.subcommand('.restart', '重启 OneBot', { authority: 5 })
+    onebot.subcommand('.restart', '重启 OneBot', { authority: 4 })
       .usage('重启 OneBot 实现和 API 服务')
       .action(async ({ session }) => {
         try {
@@ -301,7 +301,7 @@ export class Onebot {
         } catch (e) { return utils.handleError(session, e) }
       })
 
-    const info = onebot.subcommand('info', '查询账号信息', { authority: 5 })
+    const info = onebot.subcommand('info', '查询账号信息')
       .usage('查询当前账号的基本信息')
       .option('no-cache', '-n 不使用缓存', { fallback: false })
       .action(async ({ session, options }) => {

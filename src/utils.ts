@@ -90,7 +90,7 @@ export function formatAsTable(data: any[]): string {
         const value = item[key];
         if (value == null) return 0;
         if (typeof value === 'object') {
-          return value instanceof Date ? 19 : 6;
+          return value instanceof Date ? 19 : JSON.stringify(value).length;
         }
         return String(value).length;
       })
@@ -106,7 +106,7 @@ export function formatAsTable(data: any[]): string {
       if (value == null) {
         strValue = '';
       } else if (typeof value === 'object') {
-        strValue = value instanceof Date ? value.toISOString().slice(0, 19) : '[对象]';
+        strValue = value instanceof Date ? value.toISOString().slice(0, 19) : JSON.stringify(value);
       } else {
         strValue = String(value);
       }
